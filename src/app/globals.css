@@ -136,9 +136,48 @@ aside {
   align-items: center;
   justify-content: center;
   color: white;
-  font-weight: 800;
-  font-size: 18px;
   box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+  position: relative;
+  overflow: visible;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.logo-icon svg {
+  transition: transform 0.3s ease;
+}
+
+.logo-container:hover .logo-icon {
+  transform: scale(1.05);
+}
+
+.logo-container:hover .logo-icon svg {
+  transform: rotate(10deg);
+}
+
+.logo-wheel {
+  animation: logoWheelRotate 2.5s linear infinite;
+}
+
+@keyframes logoWheelRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.logo-icon::after {
+  content: '';
+  position: absolute;
+  top: -2px; left: -2px; right: -2px; bottom: -2px;
+  border-radius: inherit;
+  background: inherit;
+  z-index: -1;
+  opacity: 0.3;
+  filter: blur(4px);
+  animation: logoGlowPulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes logoGlowPulse {
+  0% { transform: scale(1); opacity: 0.3; }
+  100% { transform: scale(1.15); opacity: 0.65; }
 }
 
 .logo-text {

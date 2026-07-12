@@ -1046,7 +1046,14 @@ export default function Home() {
             
             <div className="login-header">
               <div className="logo-container" style={{ justifyContent: "center", marginBottom: "12px" }}>
-                <div className="logo-icon">T</div>
+                <div className="logo-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "20px", height: "20px" }}>
+                    <rect x="1" y="3" width="15" height="13" rx="2" ry="2"></rect>
+                    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                    <circle cx="5.5" cy="18.5" r="2.5" className="logo-wheel" style={{ transformOrigin: "5.5px 18.5px" }}></circle>
+                    <circle cx="18.5" cy="18.5" r="2.5" className="logo-wheel" style={{ transformOrigin: "18.5px 18.5px" }}></circle>
+                  </svg>
+                </div>
                 <span className="logo-text" style={{ color: "var(--text-primary)", WebkitTextFillColor: "initial" }}>TransitOps</span>
               </div>
               <h2>{loginTab === "signin" ? "Sign In" : "Register Profile"}</h2>
@@ -1175,7 +1182,14 @@ export default function Home() {
       <aside className={sidebarOpen ? "active" : ""}>
         <div className="sidebar-logo">
           <div className="logo-container">
-            <div className="logo-icon">T</div>
+            <div className="logo-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "20px", height: "20px" }}>
+                <rect x="1" y="3" width="15" height="13" rx="2" ry="2"></rect>
+                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                <circle cx="5.5" cy="18.5" r="2.5" className="logo-wheel" style={{ transformOrigin: "5.5px 18.5px" }}></circle>
+                <circle cx="18.5" cy="18.5" r="2.5" className="logo-wheel" style={{ transformOrigin: "18.5px 18.5px" }}></circle>
+              </svg>
+            </div>
             <span className="logo-text">TransitOps</span>
           </div>
           <button className="sidebar-close-btn" onClick={() => setSidebarOpen(false)}>&times;</button>
