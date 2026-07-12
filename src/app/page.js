@@ -21,6 +21,7 @@ export default function Home() {
   const [currentView, setCurrentView] = useState("dashboard");
   const [theme, setTheme] = useState("dark");
   const [showNotifications, setShowNotifications] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Search & Filters State
   const [dashboardFilter, setDashboardFilter] = useState("All");
@@ -1028,82 +1029,96 @@ export default function Home() {
   if (!currentUser) {
     return (
       <div id="login-screen">
-        <div className="login-card" style={{ maxWidth: "460px" }}>
-          
-          <div className="login-header">
-            <div className="logo-container" style={{ justifyContent: "center", marginBottom: "12px" }}>
-              <div className="logo-icon">T</div>
-              <span className="logo-text" style={{ color: "var(--text-primary)", WebkitTextFillColor: "initial" }}>TransitOps</span>
-            </div>
-            <h2>{loginTab === "signin" ? "Sign In" : "Register Profile"}</h2>
-            <p>Smart Transport Operations Platform &bull; Supabase Auth</p>
+        {/* Left Half: Premium Graphics Overlay */}
+        <div className="login-left">
+          <div className="login-left-overlay"></div>
+          <div className="login-left-content">
+            <h1>Digitizing Fleet & Transport Operations</h1>
+            <p>
+              Experience seamless route dispatching, real-time vehicle registries, driver safety scorecards, log compliance audits, and deep operational analytics from a unified premium dashboard.
+            </p>
           </div>
+        </div>
 
-          {loginSuccess && (
-            <div className="alert-banner" style={{ background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.4)", color: "#10b981", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "20px", height: "20px", flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <span style={{ fontSize: "13px", lineHeight: "1.4" }}>{loginSuccess}</span>
+        {/* Right Half: Form Wrapper */}
+        <div className="login-right">
+          <div className="login-right-card">
+            
+            <div className="login-header">
+              <div className="logo-container" style={{ justifyContent: "center", marginBottom: "12px" }}>
+                <div className="logo-icon">T</div>
+                <span className="logo-text" style={{ color: "var(--text-primary)", WebkitTextFillColor: "initial" }}>TransitOps</span>
               </div>
-              <button type="button" onClick={() => setLoginSuccess("")} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: "18px", fontWeight: 700, padding: "0 4px", display: "flex", alignItems: "center" }}>&times;</button>
+              <h2>{loginTab === "signin" ? "Sign In" : "Register Profile"}</h2>
+              <p>Smart Transport Operations Platform &bull; Supabase Auth</p>
             </div>
-          )}
 
-          {loginError && (
-            <div className="alert-banner" id="login-error">
-              <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-              <span>{loginError}</span>
-            </div>
-          )}
+            {loginSuccess && (
+              <div className="alert-banner" style={{ background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.4)", color: "#10b981", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "20px", height: "20px", flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  <span style={{ fontSize: "13px", lineHeight: "1.4" }}>{loginSuccess}</span>
+                </div>
+                <button type="button" onClick={() => setLoginSuccess("")} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: "18px", fontWeight: 700, padding: "0 4px", display: "flex", alignItems: "center" }}>&times;</button>
+              </div>
+            )}
 
-          {/* SIGN IN FORM */}
-          {loginTab === "signin" ? (
-            <form onSubmit={handleLoginSubmit}>
-              <div className="form-group">
-                <label>Email Address</label>
-                <input type="email" className="form-control" placeholder="manager@transitops.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
+            {loginError && (
+              <div className="alert-banner" id="login-error">
+                <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <span>{loginError}</span>
               </div>
-              <div className="form-group">
-                <label>Password</label>
-                <input type="password" className="form-control" placeholder="••••••••" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
-              </div>
-              <button type="submit" className="btn btn-primary w-full" style={{ height: "44px", marginTop: "8px" }}>Login</button>
-              
-              <p style={{ textAlign: "center", fontSize: "12px", marginTop: "12px", color: "var(--text-secondary)" }}>
-                Don't have an account? <span onClick={() => { setLoginTab("signup"); setLoginError(""); setLoginSuccess(""); }} style={{ color: "var(--accent-primary)", cursor: "pointer", fontWeight: 600 }}>Sign up here</span>
-              </p>
-            </form>
-          ) : (
-            // SIGN UP FORM
-            <form onSubmit={handleSignUpSubmit}>
-              <div className="form-group">
-                <label>Full Name</label>
-                <input type="text" className="form-control" placeholder="Alex Mercer" value={signupForm.name} onChange={e => setSignupForm({ ...signupForm, name: e.target.value })} required />
-              </div>
-              <div className="form-group">
-                <label>Email Address</label>
-                <input type="email" className="form-control" placeholder="alex@transitops.com" value={signupForm.email} onChange={e => setSignupForm({ ...signupForm, email: e.target.value })} required />
-              </div>
-              <div className="form-group">
-                <label>Password</label>
-                <input type="password" className="form-control" placeholder="Min. 6 characters" value={signupForm.password} onChange={e => setSignupForm({ ...signupForm, password: e.target.value })} required minLength="6" />
-              </div>
-              <div className="form-group">
-                <label>Choose Role (RBAC Claim)</label>
-                <select className="form-control" value={signupForm.role} onChange={e => setSignupForm({ ...signupForm, role: e.target.value })} required>
-                  <option value="Fleet Manager">Fleet Manager</option>
-                  <option value="Driver">Driver</option>
-                  <option value="Safety Officer">Safety Officer</option>
-                  <option value="Financial Analyst">Financial Analyst</option>
-                </select>
-              </div>
-              <button type="submit" className="btn btn-success w-full" style={{ height: "44px", marginTop: "8px" }}>Create Profile</button>
-              
-              <p style={{ textAlign: "center", fontSize: "12px", marginTop: "12px", color: "var(--text-secondary)" }}>
-                Already registered? <span onClick={() => { setLoginTab("signin"); setLoginError(""); setLoginSuccess(""); }} style={{ color: "var(--accent-primary)", cursor: "pointer", fontWeight: 600 }}>Login here</span>
-              </p>
-            </form>
-          )}
+            )}
+
+            {/* SIGN IN FORM */}
+            {loginTab === "signin" ? (
+              <form onSubmit={handleLoginSubmit}>
+                <div className="form-group">
+                  <label>Email Address</label>
+                  <input type="email" className="form-control" placeholder="manager@transitops.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
+                </div>
+                <div className="form-group">
+                  <label>Password</label>
+                  <input type="password" className="form-control" placeholder="••••••••" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
+                </div>
+                <button type="submit" className="btn btn-primary w-full" style={{ height: "44px", marginTop: "8px" }}>Login</button>
+                
+                <p style={{ textAlign: "center", fontSize: "12px", marginTop: "12px", color: "var(--text-secondary)" }}>
+                  Don't have an account? <span onClick={() => { setLoginTab("signup"); setLoginError(""); setLoginSuccess(""); }} style={{ color: "var(--accent-primary)", cursor: "pointer", fontWeight: 600 }}>Sign up here</span>
+                </p>
+              </form>
+            ) : (
+              // SIGN UP FORM
+              <form onSubmit={handleSignUpSubmit}>
+                <div className="form-group">
+                  <label>Full Name</label>
+                  <input type="text" className="form-control" placeholder="Alex Mercer" value={signupForm.name} onChange={e => setSignupForm({ ...signupForm, name: e.target.value })} required />
+                </div>
+                <div className="form-group">
+                  <label>Email Address</label>
+                  <input type="email" className="form-control" placeholder="alex@transitops.com" value={signupForm.email} onChange={e => setSignupForm({ ...signupForm, email: e.target.value })} required />
+                </div>
+                <div className="form-group">
+                  <label>Password</label>
+                  <input type="password" className="form-control" placeholder="Min. 6 characters" value={signupForm.password} onChange={e => setSignupForm({ ...signupForm, password: e.target.value })} required minLength="6" />
+                </div>
+                <div className="form-group">
+                  <label>Choose Role (RBAC Claim)</label>
+                  <select className="form-control" value={signupForm.role} onChange={e => setSignupForm({ ...signupForm, role: e.target.value })} required>
+                    <option value="Fleet Manager">Fleet Manager</option>
+                    <option value="Driver">Driver</option>
+                    <option value="Safety Officer">Safety Officer</option>
+                    <option value="Financial Analyst">Financial Analyst</option>
+                  </select>
+                </div>
+                <button type="submit" className="btn btn-success w-full" style={{ height: "44px", marginTop: "8px" }}>Create Profile</button>
+                
+                <p style={{ textAlign: "center", fontSize: "12px", marginTop: "12px", color: "var(--text-secondary)" }}>
+                  Already registered? <span onClick={() => { setLoginTab("signin"); setLoginError(""); setLoginSuccess(""); }} style={{ color: "var(--accent-primary)", cursor: "pointer", fontWeight: 600 }}>Login here</span>
+                </p>
+              </form>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -1153,54 +1168,58 @@ export default function Home() {
 
   return (
     <div id="app-layout">
+      {/* Mobile Sidebar Overlay Dimmer */}
+      {sidebarOpen && <div className="mobile-overlay" onClick={() => setSidebarOpen(false)}></div>}
+
       {/* SIDEBAR */}
-      <aside>
+      <aside className={sidebarOpen ? "active" : ""}>
         <div className="sidebar-logo">
           <div className="logo-container">
             <div className="logo-icon">T</div>
             <span className="logo-text">TransitOps</span>
           </div>
+          <button className="sidebar-close-btn" onClick={() => setSidebarOpen(false)}>&times;</button>
         </div>
 
         <ul className="sidebar-menu">
           <li>
-            <a className={`menu-item ${currentView === "dashboard" ? "active" : ""}`} onClick={() => setCurrentView("dashboard")}>
+            <a className={`menu-item ${currentView === "dashboard" ? "active" : ""}`} onClick={() => { setCurrentView("dashboard"); setSidebarOpen(false); }}>
               <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
               Dashboard
             </a>
           </li>
           <li>
-            <a className={`menu-item ${currentView === "vehicles" ? "active" : ""}`} onClick={() => setCurrentView("vehicles")}>
+            <a className={`menu-item ${currentView === "vehicles" ? "active" : ""}`} onClick={() => { setCurrentView("vehicles"); setSidebarOpen(false); }}>
               <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="2" ry="2"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
               Vehicles Registry
             </a>
           </li>
           <li>
-            <a className={`menu-item ${currentView === "drivers" ? "active" : ""}`} onClick={() => setCurrentView("drivers")}>
+            <a className={`menu-item ${currentView === "drivers" ? "active" : ""}`} onClick={() => { setCurrentView("drivers"); setSidebarOpen(false); }}>
               <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
               Drivers Directory
             </a>
           </li>
           <li>
-            <a className={`menu-item ${currentView === "trips" ? "active" : ""}`} onClick={() => setCurrentView("trips")}>
+            <a className={`menu-item ${currentView === "trips" ? "active" : ""}`} onClick={() => { setCurrentView("trips"); setSidebarOpen(false); }}>
               <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="18" r="3"></circle><line x1="12" y1="6" x2="12" y2="18"></line><line x1="6" y1="12" x2="18" y2="12"></line><path d="M18 6h-6"></path><path d="M6 18h6"></path></svg>
               Trip Management
             </a>
           </li>
           <li>
-            <a className={`menu-item ${currentView === "maintenance" ? "active" : ""}`} onClick={() => setCurrentView("maintenance")}>
+            <a className={`menu-item ${currentView === "maintenance" ? "active" : ""}`} onClick={() => { setCurrentView("maintenance"); setSidebarOpen(false); }}>
               <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
               Maintenance Log
             </a>
           </li>
           <li>
-            <a className={`menu-item ${currentView === "expenses" ? "active" : ""}`} onClick={() => setCurrentView("expenses")}>
+            <a className={`menu-item ${currentView === "expenses" ? "active" : ""}`} onClick={() => { setCurrentView("expenses"); setSidebarOpen(false); }}>
               <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
               Fuel & Expenses
             </a>
           </li>
           <li>
-            <a className={`menu-item ${currentView === "reports" ? "active" : ""}`} onClick={() => setCurrentView("reports")}>
+            <a className={`menu-item ${currentView === "reports" ? "active" : ""}`} onClick={() => { setCurrentView("reports"); setSidebarOpen(false); }}>
               <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
               Reports & Analytics
             </a>
@@ -1224,11 +1243,17 @@ export default function Home() {
           </button>
         </div>
       </aside>
-
       {/* MAIN VIEW */}
       <main>
         <header>
-          <div className="header-title-container">
+          <div className="header-title-container" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} title="Open Menu">
+              <svg style={{ width: "20px", height: "20px", fill: "none", stroke: "currentColor", strokeWidth: "2" }} viewBox="0 0 24 24">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
             <h1 style={{ textTransform: "capitalize" }}>{currentView === "trips" ? "Trip Dispatcher" : `${currentView} Management`}</h1>
           </div>
 
