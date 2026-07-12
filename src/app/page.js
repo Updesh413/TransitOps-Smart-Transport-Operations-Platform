@@ -46,7 +46,8 @@ export default function Home() {
   const [completeForm, setCompleteForm] = useState({ tripId: "", vehicleId: "", finalOdometer: "", fuelLiters: "", fuelCost: "", revenue: "", notes: "", startOdometer: 0, distance: 0 });
   const [maintForm, setMaintForm] = useState({ vehicleId: "", description: "", type: "Routine", cost: "", startDate: TODAY, status: "Active" });
   const [expenseForm, setExpenseForm] = useState({ vehicleId: "", type: "Fuel", amount: "", date: TODAY, quantity: "", notes: "" });
-  const [documentForm, setDocumentForm] = useState({ vehicleId: "", name: "", expiry: "", file: "" });
+  const [documentForm, setDocumentForm] = useState({ vehicleId: "", name: "", expiry: "" });
+  const [selectedFile, setSelectedFile] = useState(null);
 
   // 1. Check Active Session & Theme on Mount
   useEffect(() => {
@@ -866,28 +867,71 @@ export default function Home() {
 
   // 15. Document Management
   const openDocModal = (vId) => {
-    setDocumentForm({ vehicleId: vId, name: "", expiry: "", file: "" });
+    setDocumentForm({ vehicleId: vId, name: "", expiry: "" });
+    setSelectedFile(null);
     setActiveModal("document");
   };
 
   const submitDoc = async (e) => {
     e.preventDefault();
+    if (!selectedFile) {
+      alert("Please select a file to upload.");
+      return;
+    }
+
     try {
+      let fileUrl = "";
+      const file = selectedFile;
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${documentForm.vehicleId}/${Date.now()}.${fileExt}`;
+
+      // 1. Try to upload to Supabase Storage
+      const { data, error: uploadError } = await supabase.storage
+        .from("certificates")
+        .upload(fileName, file, { cacheControl: "3600", upsert: true });
+
+      if (!uploadError && data) {
+        // Get Public URL
+        const { data: publicUrlData } = supabase.storage
+          .from("certificates")
+          .getPublicUrl(fileName);
+        fileUrl = publicUrlData.publicUrl;
+      } else {
+        // Fallback: Read file as Base64 Data URL to save directly in the DB
+        console.warn("Supabase Storage upload failed or bucket doesn't exist. Falling back to Base64 DB storage.");
+        fileUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
+        });
+      }
+
       const v = vehicles.find(item => item.id === documentForm.vehicleId);
       const docs = v?.documents ? [...v.documents] : [];
       docs.push({
         name: documentForm.name,
         expiry: documentForm.expiry,
-        file: documentForm.file
+        fileName: file.name,
+        fileUrl: fileUrl
       });
 
-      const { error } = await supabase.from("vehicles").update({ documents: docs }).eq("id", documentForm.vehicleId);
-      if (error) throw error;
+      const { error: dbError } = await supabase
+        .from("vehicles")
+        .update({ documents: docs })
+        .eq("id", documentForm.vehicleId);
+      if (dbError) throw dbError;
 
-      setDocumentForm({ ...documentForm, name: "", expiry: "", file: "" });
+      setDocumentForm({ ...documentForm, name: "", expiry: "" });
+      setSelectedFile(null);
+      
+      const fileInput = document.getElementById("certificate-file-input");
+      if (fileInput) fileInput.value = "";
+      
       await loadData();
+      alert("Certificate uploaded successfully!");
     } catch (err) {
-      alert("Error adding document: " + err.message);
+      alert("Error uploading document: " + err.message);
     }
   };
 
@@ -905,6 +949,37 @@ export default function Home() {
       } catch (err) {
         alert("Error removing document: " + err.message);
       }
+    }
+  };
+
+  const openFile = (fileUrl, fileName) => {
+    if (!fileUrl) return;
+    try {
+      if (fileUrl.startsWith("data:")) {
+        const parts = fileUrl.split(",");
+        const mime = parts[0].match(/:(.*?);/)[1];
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        
+        const newWindow = window.open(blobUrl, "_blank");
+        if (!newWindow) {
+          alert("Pop-up blocked! Please allow pop-ups to view the certificate file.");
+        }
+      } else {
+        const newWindow = window.open(fileUrl, "_blank");
+        if (!newWindow) {
+          alert("Pop-up blocked! Please allow pop-ups to view the certificate file.");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to open document file:", err);
+      alert("Failed to render the document. The file stream may be corrupted.");
     }
   };
 
@@ -1141,16 +1216,7 @@ export default function Home() {
               <div className="role-badge">{currentUser.role}</div>
             </div>
           </div>
-          
-          <div className="role-selector-container">
-            <label>RBAC Role Switcher</label>
-            <select className="role-select" value={currentUser.role} onChange={e => handleRoleSwitch(e.target.value)}>
-              <option value="Fleet Manager">Fleet Manager</option>
-              <option value="Driver">Driver</option>
-              <option value="Safety Officer">Safety Officer</option>
-              <option value="Financial Analyst">Financial Analyst</option>
-            </select>
-          </div>
+
 
           <button className="logout-btn" onClick={handleLogout}>
             <svg style={{ width: "14px", height: "14px", fill: "none", stroke: "currentColor", strokeWidth: "2" }} viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
@@ -2357,10 +2423,17 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>Mock File Name (e.g. doc.pdf)</label>
-                    <input type="text" className="form-control" placeholder="cert_clearance_2026.pdf" value={documentForm.file} onChange={e => setDocumentForm({ ...documentForm, file: e.target.value })} required />
+                    <label>Choose File (PDF, DOC, DOCX)</label>
+                    <input
+                      type="file"
+                      id="certificate-file-input"
+                      className="form-control"
+                      accept=".pdf,.doc,.docx"
+                      onChange={e => setSelectedFile(e.target.files ? e.target.files[0] : null)}
+                      required
+                    />
                   </div>
-                  <button type="submit" className="btn btn-primary" style={{ alignSelf: "flex-end" }}>Add Document</button>
+                  <button type="submit" className="btn btn-primary" style={{ alignSelf: "flex-end" }}>Upload Certificate</button>
                 </form>
               </div>
 
@@ -2371,10 +2444,40 @@ export default function Home() {
                 ) : (
                   (vehicles.find(v => v.id === documentForm.vehicleId)?.documents || []).map((doc, idx) => {
                     const isExpired = doc.expiry < TODAY;
+                    const canView = ["Fleet Manager", "Safety Officer"].includes(currentUser.role);
+                    
                     return (
                       <div key={idx} className="document-item">
                         <div>
-                          <div className="doc-name">{doc.name} ({doc.file})</div>
+                          <div className="doc-name">
+                            {doc.name}{" "}
+                            {canView ? (
+                              <span
+                                onClick={() => openFile(doc.fileUrl, doc.fileName || doc.file)}
+                                style={{
+                                  color: "var(--accent-primary)",
+                                  textDecoration: "underline",
+                                  marginLeft: "8px",
+                                  fontSize: "12px",
+                                  fontWeight: 500,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                View File ({doc.fileName || doc.file || "Attachment"})
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  color: "var(--text-muted)",
+                                  fontSize: "12px",
+                                  marginLeft: "8px"
+                                }}
+                                title="Access restricted to Fleet Managers and Safety Officers"
+                              >
+                                🔒 Restricted ({doc.fileName || doc.file || "Attachment"})
+                              </span>
+                            )}
+                          </div>
                           <div className={`doc-expiry ${isExpired ? 'expired' : ''}`}>Expires: {doc.expiry} {isExpired && "(EXPIRED)"}</div>
                         </div>
                         {hasAccess("vehicles", "update") && (
