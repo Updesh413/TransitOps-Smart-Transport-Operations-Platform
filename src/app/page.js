@@ -2,19 +2,19 @@
 
 import { useState, useEffect, useRef } from "react";
 import Chart from "chart.js/auto";
-import { DEFAULT_SEED_DATA } from "./seed";
+import { supabase, supabaseConnectionInfo } from "./supabaseClient";
 
 const TODAY = "2026-07-12";
 
 export default function Home() {
-  // DB State (synced with localStorage)
-  const [users, setUsers] = useState([]);
+  // DB State (Directly synced with Supabase Database)
   const [vehicles, setVehicles] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [trips, setTrips] = useState([]);
   const [maintenance, setMaintenance] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [schemaError, setSchemaError] = useState(false);
 
   // UI / Navigation State
   const [currentUser, setCurrentUser] = useState(null);
@@ -31,78 +31,69 @@ export default function Home() {
   // Authentication Fields
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  const [demoAccount, setDemoAccount] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [loginSuccess, setLoginSuccess] = useState("");
+  const [loginTab, setLoginTab] = useState("signin"); // 'signin' or 'signup'
+  const [signupForm, setSignupForm] = useState({ name: "", email: "", password: "", role: "Driver" });
 
   // Modals Toggles & Form States
   const [activeModal, setActiveModal] = useState(null); // 'vehicle', 'driver', 'trip', 'completeTrip', 'maintenance', 'expense', 'document'
   
   // Forms states
   const [vehicleForm, setVehicleForm] = useState({ editMode: false, id: "", name: "", type: "Van", maxCapacity: "", odometer: "", cost: "", status: "Available" });
-  const [driverForm, setDriverForm] = useState({ editMode: false, id: "", name: "", licenseNumber: "", licenseCategory: "Class A CDL", licenseExpiry: "", contact: "", safetyScore: "", status: "Available" });
+  const [driverForm, setDriverForm] = useState({ editMode: false, id: "", name: "", licenseNumber: "", licenseCategory: "Class A CDL", licenseExpiry: "", contact: "", safetyScore: "", status: "Available", email: "" });
   const [tripForm, setTripForm] = useState({ source: "", destination: "", vehicleId: "", driverId: "", cargoWeight: "", distance: "", revenue: "", status: "Draft" });
   const [completeForm, setCompleteForm] = useState({ tripId: "", vehicleId: "", finalOdometer: "", fuelLiters: "", fuelCost: "", revenue: "", notes: "", startOdometer: 0, distance: 0 });
   const [maintForm, setMaintForm] = useState({ vehicleId: "", description: "", type: "Routine", cost: "", startDate: TODAY, status: "Active" });
   const [expenseForm, setExpenseForm] = useState({ vehicleId: "", type: "Fuel", amount: "", date: TODAY, quantity: "", notes: "" });
   const [documentForm, setDocumentForm] = useState({ vehicleId: "", name: "", expiry: "", file: "" });
 
-  // Charts Refs
-  const dashFinChartRef = useRef(null);
-  const dashDistChartRef = useRef(null);
-  const reportRoiChartRef = useRef(null);
-  const reportCostChartRef = useRef(null);
-
-  // 1. Initialize DB from localStorage or seed
+  // 1. Check Active Session & Theme on Mount
   useEffect(() => {
-    // Check if browser environment
     if (typeof window !== "undefined") {
-      const isInitialized = localStorage.getItem("transitops_initialized");
-      let initialData = {};
-      if (!isInitialized) {
-        localStorage.setItem("transitops_initialized", "true");
-        localStorage.setItem("transitops_users", JSON.stringify(DEFAULT_SEED_DATA.users));
-        localStorage.setItem("transitops_vehicles", JSON.stringify(DEFAULT_SEED_DATA.vehicles));
-        localStorage.setItem("transitops_drivers", JSON.stringify(DEFAULT_SEED_DATA.drivers));
-        localStorage.setItem("transitops_trips", JSON.stringify(DEFAULT_SEED_DATA.trips));
-        localStorage.setItem("transitops_maintenance", JSON.stringify(DEFAULT_SEED_DATA.maintenanceLogs));
-        localStorage.setItem("transitops_expenses", JSON.stringify(DEFAULT_SEED_DATA.expenses));
-        initialData = DEFAULT_SEED_DATA;
-      } else {
-        initialData = {
-          users: JSON.parse(localStorage.getItem("transitops_users") || "[]"),
-          vehicles: JSON.parse(localStorage.getItem("transitops_vehicles") || "[]"),
-          drivers: JSON.parse(localStorage.getItem("transitops_drivers") || "[]"),
-          trips: JSON.parse(localStorage.getItem("transitops_trips") || "[]"),
-          maintenance: JSON.parse(localStorage.getItem("transitops_maintenance") || "[]"),
-          expenses: JSON.parse(localStorage.getItem("transitops_expenses") || "[]"),
-        };
-      }
-
-      setUsers(initialData.users);
-      setVehicles(initialData.vehicles);
-      setDrivers(initialData.drivers);
-      setTrips(initialData.trips);
-      setMaintenance(initialData.maintenance);
-      setExpenses(initialData.expenses);
-
-      // Check active session
       const session = sessionStorage.getItem("transitops_session");
       if (session) {
         setCurrentUser(JSON.parse(session));
       }
 
-      // Check theme
       const savedTheme = localStorage.getItem("transitops_theme") || "dark";
       setTheme(savedTheme);
       document.documentElement.setAttribute("data-theme", savedTheme);
     }
   }, []);
 
-  // 2. LocalStorage Syncing
-  const syncDb = (key, data, setter) => {
-    localStorage.setItem(`transitops_${key}`, JSON.stringify(data));
-    setter(data);
+  // 2. Fetch Data from Supabase
+  const loadData = async () => {
+    if (!currentUser) return;
+    setSchemaError(false);
+    
+    try {
+      const { data: v, error: errV } = await supabase.from("vehicles").select("*");
+      const { data: d, error: errD } = await supabase.from("drivers").select("*");
+      const { data: t, error: errT } = await supabase.from("trips").select("*");
+      const { data: m, error: errM } = await supabase.from("maintenance").select("*");
+      const { data: e, error: errE } = await supabase.from("expenses").select("*");
+
+      if (errV?.code === "42P01" || errD?.code === "42P01" || errT?.code === "42P01" || errM?.code === "42P01" || errE?.code === "42P01") {
+        setSchemaError(true);
+      }
+
+      if (v) setVehicles(v);
+      if (d) setDrivers(d);
+      if (t) setTrips(t);
+      if (m) setMaintenance(m);
+      if (e) setExpenses(e);
+    } catch (err) {
+      console.error("Failed to load data from Supabase:", err);
+    }
   };
+
+  // Re-fetch when user logs in or switches roles
+  useEffect(() => {
+    if (currentUser) {
+      loadData();
+    }
+  }, [currentUser]);
 
   // 3. Compute Compliance Alerts / Notifications
   useEffect(() => {
@@ -112,6 +103,7 @@ export default function Home() {
     
     // Check drivers
     drivers.forEach(driver => {
+      if (!driver.licenseExpiry) return;
       const expDate = new Date(driver.licenseExpiry);
       const todayDate = new Date(TODAY);
       const diffTime = expDate - todayDate;
@@ -174,11 +166,29 @@ export default function Home() {
     setAlerts(notifications);
   }, [drivers, vehicles]);
 
-  // 4. Render Dashboard Charts
-  useEffect(() => {
-    if (currentView !== "dashboard" || !currentUser) return;
+  // 4. Role-based Data Filter Mapping
+  const myDriverProfile = drivers.find(d => d.email === currentUser?.email || d.name === currentUser?.name);
+  const myDriverId = myDriverProfile ? myDriverProfile.id : null;
 
-    // Filter vehicles by dashboard Filter
+  const displayTrips = currentUser?.role === "Driver" 
+    ? trips.filter(t => t.driverId === myDriverId)
+    : trips;
+
+  const displayMaintenance = currentUser?.role === "Driver"
+    ? maintenance.filter(m => displayTrips.some(t => t.vehicleId === m.vehicleId))
+    : maintenance;
+
+  const displayExpenses = currentUser?.role === "Driver"
+    ? expenses.filter(e => displayTrips.some(t => t.vehicleId === e.vehicleId))
+    : expenses;
+
+  // 5. Render Dashboard Charts
+  useEffect(() => {
+    if (currentView !== "dashboard" || !currentUser || schemaError) return;
+
+    // Financial trends are only relevant/visible to Manager & Analyst roles
+    if (currentUser.role === "Driver" || currentUser.role === "Safety Officer") return;
+
     const filteredVehicles = dashboardFilter === "All" 
       ? vehicles 
       : vehicles.filter(v => v.type === dashboardFilter);
@@ -188,11 +198,9 @@ export default function Home() {
     const inshop = filteredVehicles.filter(v => v.status === "In Shop").length;
     const retired = filteredVehicles.filter(v => v.status === "Retired").length;
 
-    // Financial trends values
     const revenueSum = trips.filter(t => t.status === "Completed").reduce((sum, t) => sum + (t.revenue || 0), 0);
     const expenseSum = expenses.reduce((sum, e) => sum + e.amount, 0);
 
-    // 1. Bar Chart
     const ctxFin = document.getElementById("canvasFinancial");
     let chartFin = null;
     if (ctxFin) {
@@ -238,7 +246,6 @@ export default function Home() {
       });
     }
 
-    // 2. Donut Chart
     const ctxDist = document.getElementById("canvasDistribution");
     let chartDist = null;
     if (ctxDist) {
@@ -269,13 +276,12 @@ export default function Home() {
       if (chartFin) chartFin.destroy();
       if (chartDist) chartDist.destroy();
     };
-  }, [currentView, currentUser, dashboardFilter, vehicles, trips, expenses, theme]);
+  }, [currentView, currentUser, dashboardFilter, vehicles, trips, expenses, theme, schemaError]);
 
-  // 5. Render Reports Charts
+  // 6. Render Reports Charts
   useEffect(() => {
-    if (currentView !== "reports" || !currentUser) return;
+    if (currentView !== "reports" || !currentUser || schemaError) return;
 
-    // ROI per vehicle calculations
     const rows = vehicles.map(v => {
       const vTrips = trips.filter(t => t.vehicleId === v.id && t.status === "Completed");
       const vExpenses = expenses.filter(e => e.vehicleId === v.id);
@@ -290,7 +296,6 @@ export default function Home() {
     const totalMaint = expenses.filter(e => e.type === "Maintenance").reduce((sum, e) => sum + e.amount, 0);
     const totalOthers = expenses.filter(e => e.type !== "Fuel" && e.type !== "Maintenance").reduce((sum, e) => sum + e.amount, 0);
 
-    // 1. ROI Chart
     const ctxRoi = document.getElementById("canvasReportsRoi");
     let chartRoi = null;
     if (ctxRoi) {
@@ -326,7 +331,6 @@ export default function Home() {
       });
     }
 
-    // 2. Cost Centers Chart
     const ctxCost = document.getElementById("canvasReportsCost");
     let chartCost = null;
     if (ctxCost) {
@@ -357,12 +361,12 @@ export default function Home() {
       if (chartRoi) chartRoi.destroy();
       if (chartCost) chartCost.destroy();
     };
-  }, [currentView, currentUser, vehicles, trips, expenses, theme]);
+  }, [currentView, currentUser, vehicles, trips, expenses, theme, schemaError]);
 
-  // 6. RBAC Verification
+  // 7. RBAC Module Verification
   const hasAccess = (module, action) => {
     if (!currentUser) return false;
-    if (currentUser.role === "Fleet Manager") return true; // Superuser bypass
+    if (currentUser.role === "Fleet Manager") return true; // Manager superuser access
 
     if (module === "reports" && action === "view") {
       return ["Fleet Manager", "Financial Analyst"].includes(currentUser.role);
@@ -379,36 +383,76 @@ export default function Home() {
     return rules[module]?.[action]?.includes(currentUser.role) || false;
   };
 
-  // 7. Auth Handlers
-  const handleLoginSubmit = (e) => {
+  // 8. Supabase Auth Handlers
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    const user = users.find(u => u.email.toLowerCase() === loginEmail.toLowerCase() && u.password === loginPassword);
+    setLoginError("");
+    setLoginSuccess("");
     
-    if (user) {
-      setCurrentUser(user);
-      sessionStorage.setItem("transitops_session", JSON.stringify(user));
-      setLoginError("");
-      setCurrentView("dashboard");
-    } else {
-      setLoginError("Invalid email or password credentials.");
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword
+      });
+
+      if (error) {
+        setLoginError(error.message);
+      } else if (data?.user) {
+        const userMeta = data.user.user_metadata || {};
+        const activeUser = {
+          id: data.user.id,
+          email: data.user.email,
+          name: userMeta.name || data.user.email.split("@")[0],
+          role: userMeta.role || "Driver"
+        };
+        
+        setCurrentUser(activeUser);
+        sessionStorage.setItem("transitops_session", JSON.stringify(activeUser));
+        setCurrentView("dashboard");
+      }
+    } catch (err) {
+      setLoginError("Failed to communicate with Supabase server.");
     }
   };
 
-  const handleDemoSelect = (val) => {
-    setDemoAccount(val);
-    if (val) {
-      const [email, pwd] = val.split("|");
-      setLoginEmail(email);
-      setLoginPassword(pwd);
+  const handleSignUpSubmit = async (e) => {
+    e.preventDefault();
+    setLoginError("");
+    setLoginSuccess("");
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: signupForm.email,
+        password: signupForm.password,
+        options: {
+          data: {
+            name: signupForm.name,
+            role: signupForm.role
+          }
+        }
+      });
+
+      if (error) {
+        setLoginError(error.message);
+      } else if (data?.user) {
+        setLoginSuccess("Account registration successful! Please verify your email or sign in directly depending on your Supabase SMTP policy.");
+        setLoginTab("signin");
+        setLoginEmail(signupForm.email);
+        setLoginPassword(signupForm.password);
+      }
+    } catch (err) {
+      setLoginError("Failed to communicate with Supabase server.");
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {}
     setCurrentUser(null);
     sessionStorage.removeItem("transitops_session");
     setLoginEmail("");
     setLoginPassword("");
-    setDemoAccount("");
   };
 
   const handleRoleSwitch = (role) => {
@@ -426,7 +470,7 @@ export default function Home() {
     document.documentElement.setAttribute("data-theme", nextTheme);
   };
 
-  // 8. CRUD Operations: Vehicles
+  // 9. CRUD Operations: Vehicles
   const openVehicleModal = (v = null) => {
     if (v) {
       setVehicleForm({
@@ -454,37 +498,43 @@ export default function Home() {
     setActiveModal("vehicle");
   };
 
-  const submitVehicle = (e) => {
+  const submitVehicle = async (e) => {
     e.preventDefault();
-    const list = [...vehicles];
     const { editMode, id, name, type, maxCapacity, odometer, cost, status } = vehicleForm;
     
-    if (editMode) {
-      const idx = list.findIndex(v => v.id === id);
-      if (idx > -1) {
-        list[idx] = { ...list[idx], name, type, maxCapacity: parseInt(maxCapacity), odometer: parseInt(odometer), cost: parseInt(cost), status };
-        syncDb("vehicles", list, setVehicles);
-        setActiveModal(null);
+    try {
+      if (editMode) {
+        const { error } = await supabase
+          .from("vehicles")
+          .update({ name, type, "maxCapacity": parseInt(maxCapacity), odometer: parseInt(odometer), cost: parseInt(cost), status })
+          .eq("id", id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("vehicles")
+          .insert([{ id, name, type, "maxCapacity": parseInt(maxCapacity), odometer: parseInt(odometer), cost: parseInt(cost), status, documents: [] }]);
+        if (error) throw error;
       }
-    } else {
-      if (list.some(v => v.id.toLowerCase() === id.toLowerCase())) {
-        alert("Validation Error: Vehicle with registration number " + id + " already exists.");
-        return;
-      }
-      list.push({ id, name, type, maxCapacity: parseInt(maxCapacity), odometer: parseInt(odometer), cost: parseInt(cost), status, documents: [] });
-      syncDb("vehicles", list, setVehicles);
       setActiveModal(null);
+      await loadData();
+    } catch (err) {
+      alert("Error saving vehicle: " + err.message);
     }
   };
 
-  const deleteVehicle = (id) => {
+  const deleteVehicle = async (id) => {
     if (confirm(`Are you sure you want to delete vehicle ${id}?`)) {
-      const list = vehicles.filter(v => v.id !== id);
-      syncDb("vehicles", list, setVehicles);
+      try {
+        const { error } = await supabase.from("vehicles").delete().eq("id", id);
+        if (error) throw error;
+        await loadData();
+      } catch (err) {
+        alert("Error deleting vehicle: " + err.message);
+      }
     }
   };
 
-  // 9. CRUD Operations: Drivers
+  // 10. CRUD Operations: Drivers
   const openDriverModal = (d = null) => {
     if (d) {
       setDriverForm({
@@ -496,7 +546,8 @@ export default function Home() {
         licenseExpiry: d.licenseExpiry,
         contact: d.contact,
         safetyScore: d.safetyScore,
-        status: d.status
+        status: d.status,
+        email: d.email || ""
       });
     } else {
       setDriverForm({
@@ -508,43 +559,50 @@ export default function Home() {
         licenseExpiry: "",
         contact: "",
         safetyScore: "",
-        status: "Available"
+        status: "Available",
+        email: ""
       });
     }
     setActiveModal("driver");
   };
 
-  const submitDriver = (e) => {
+  const submitDriver = async (e) => {
     e.preventDefault();
-    const list = [...drivers];
-    const { editMode, name, licenseNumber, licenseCategory, licenseExpiry, contact, safetyScore, status } = driverForm;
+    const { editMode, name, licenseNumber, licenseCategory, licenseExpiry, contact, safetyScore, status, email } = driverForm;
 
-    if (editMode) {
-      const idx = list.findIndex(d => d.id === licenseNumber);
-      if (idx > -1) {
-        list[idx] = { ...list[idx], name, licenseCategory, licenseExpiry, contact, safetyScore: parseInt(safetyScore), status };
-        syncDb("drivers", list, setDrivers);
-        setActiveModal(null);
+    try {
+      if (editMode) {
+        const { error } = await supabase
+          .from("drivers")
+          .update({ name, "licenseNumber": licenseNumber, "licenseCategory": licenseCategory, "licenseExpiry": licenseExpiry, contact, "safetyScore": parseInt(safetyScore), status, email: email || null })
+          .eq("id", licenseNumber);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("drivers")
+          .insert([{ id: licenseNumber, name, "licenseNumber": licenseNumber, "licenseCategory": licenseCategory, "licenseExpiry": licenseExpiry, contact, "safetyScore": parseInt(safetyScore), status, email: email || null }]);
+        if (error) throw error;
       }
-    } else {
-      if (list.some(d => d.id.toLowerCase() === licenseNumber.toLowerCase())) {
-        alert("Validation Error: Driver with license " + licenseNumber + " already exists.");
-        return;
-      }
-      list.push({ id: licenseNumber, name, licenseNumber, licenseCategory, licenseExpiry, contact, safetyScore: parseInt(safetyScore), status });
-      syncDb("drivers", list, setDrivers);
       setActiveModal(null);
+      await loadData();
+    } catch (err) {
+      alert("Error saving driver: " + err.message);
     }
   };
 
-  const deleteDriver = (id) => {
+  const deleteDriver = async (id) => {
     if (confirm(`Remove driver profile ${id}?`)) {
-      const list = drivers.filter(d => d.id !== id);
-      syncDb("drivers", list, setDrivers);
+      try {
+        const { error } = await supabase.from("drivers").delete().eq("id", id);
+        if (error) throw error;
+        await loadData();
+      } catch (err) {
+        alert("Error deleting driver: " + err.message);
+      }
     }
   };
 
-  // 10. CRUD Operations: Trips
+  // 11. CRUD Operations: Trips
   const openTripModal = () => {
     setTripForm({ source: "", destination: "", vehicleId: "", driverId: "", cargoWeight: "", distance: "", revenue: "", status: "Draft" });
     setActiveModal("trip");
@@ -556,71 +614,77 @@ export default function Home() {
     return v ? parseInt(tripForm.cargoWeight) > v.maxCapacity : false;
   };
 
-  const submitTrip = (e) => {
+  const submitTrip = async (e) => {
     e.preventDefault();
-    const list = [...trips];
     const { source, destination, vehicleId, driverId, cargoWeight, distance, revenue, status } = tripForm;
 
-    // Double validation
-    if (vehicleId) {
-      const v = vehicles.find(v => v.id === vehicleId);
-      if (parseInt(cargoWeight) > v.maxCapacity) {
-        alert("Business Rule Error: Cargo weight exceeds max payload capacity of vehicle!");
-        return;
+    try {
+      if (vehicleId) {
+        const v = vehicles.find(v => v.id === vehicleId);
+        if (v && parseInt(cargoWeight) > v.maxCapacity) {
+          alert("Business Rule Error: Cargo weight exceeds max payload capacity of vehicle!");
+          return;
+        }
+      }
+
+      const nextId = `TRIP-${1001 + trips.length}`;
+
+      const { error } = await supabase.from("trips").insert([{
+        id: nextId,
+        source, destination, "vehicleId": vehicleId, "driverId": driverId,
+        "cargoWeight": parseInt(cargoWeight),
+        distance: parseInt(distance),
+        revenue: parseInt(revenue),
+        status,
+        "startDate": status === "Dispatched" ? TODAY : null,
+        "endDate": null,
+        "fuelConsumed": 0,
+        "endOdometer": 0
+      }]);
+      if (error) throw error;
+
+      if (status === "Dispatched") {
+        await supabase.from("vehicles").update({ status: "On Trip" }).eq("id", vehicleId);
+        await supabase.from("drivers").update({ status: "On Trip" }).eq("id", driverId);
+      }
+
+      setActiveModal(null);
+      await loadData();
+    } catch (err) {
+      alert("Error saving trip: " + err.message);
+    }
+  };
+
+  const cancelTrip = async (tripId) => {
+    if (confirm(`Cancel active dispatched trip ${tripId}? assets will be released.`)) {
+      try {
+        const t = trips.find(item => item.id === tripId);
+        if (t) {
+          const { error } = await supabase.from("trips").update({ status: "Cancelled" }).eq("id", tripId);
+          if (error) throw error;
+          await supabase.from("vehicles").update({ status: "Available" }).eq("id", t.vehicleId);
+          await supabase.from("drivers").update({ status: "Available" }).eq("id", t.driverId);
+        }
+        await loadData();
+      } catch (err) {
+        alert("Error cancelling trip: " + err.message);
       }
     }
-
-    // Status Transitions
-    if (status === "Dispatched") {
-      const updatedVehicles = vehicles.map(v => v.id === vehicleId ? { ...v, status: "On Trip" } : v);
-      const updatedDrivers = drivers.map(d => d.id === driverId ? { ...d, status: "On Trip" } : d);
-      syncDb("vehicles", updatedVehicles, setVehicles);
-      syncDb("drivers", updatedDrivers, setDrivers);
-    }
-
-    const nextId = `TRIP-${1001 + list.length}`;
-    list.push({
-      id: nextId,
-      source, destination, vehicleId, driverId,
-      cargoWeight: parseInt(cargoWeight),
-      distance: parseInt(distance),
-      revenue: parseInt(revenue),
-      status,
-      startDate: status === "Dispatched" ? TODAY : "",
-      endDate: "",
-      fuelConsumed: 0,
-      endOdometer: 0
-    });
-
-    syncDb("trips", list, setTrips);
-    setActiveModal(null);
   };
 
-  const cancelTrip = (tripId) => {
-    if (confirm(`Cancel active dispatched trip ${tripId}? assets will be released.`)) {
-      const updatedTrips = trips.map(t => {
-        if (t.id === tripId) {
-          // Release
-          const updatedVehicles = vehicles.map(v => v.id === t.vehicleId ? { ...v, status: "Available" } : v);
-          const updatedDrivers = drivers.map(d => d.id === t.driverId ? { ...d, status: "Available" } : d);
-          syncDb("vehicles", updatedVehicles, setVehicles);
-          syncDb("drivers", updatedDrivers, setDrivers);
-          return { ...t, status: "Cancelled" };
-        }
-        return t;
-      });
-      syncDb("trips", updatedTrips, setTrips);
-    }
-  };
-
-  const deleteTrip = (tripId) => {
+  const deleteTrip = async (tripId) => {
     if (confirm(`Delete draft record ${tripId}?`)) {
-      const list = trips.filter(t => t.id !== tripId);
-      syncDb("trips", list, setTrips);
+      try {
+        const { error } = await supabase.from("trips").delete().eq("id", tripId);
+        if (error) throw error;
+        await loadData();
+      } catch (err) {
+        alert("Error deleting trip: " + err.message);
+      }
     }
   };
 
-  // 11. Complete Trip Process
+  // 12. Complete Trip Process
   const openCompleteModal = (trip) => {
     const v = vehicles.find(item => item.id === trip.vehicleId);
     setCompleteForm({
@@ -637,7 +701,7 @@ export default function Home() {
     setActiveModal("completeTrip");
   };
 
-  const submitCompleteTrip = (e) => {
+  const submitCompleteTrip = async (e) => {
     e.preventDefault();
     const finalOdom = parseInt(completeForm.finalOdometer);
     if (finalOdom < completeForm.startOdometer) {
@@ -645,198 +709,206 @@ export default function Home() {
       return;
     }
 
-    // 1. Update Trip
-    const updatedTrips = trips.map(t => {
-      if (t.id === completeForm.tripId) {
-        return {
-          ...t,
+    try {
+      const targetTrip = trips.find(t => t.id === completeForm.tripId);
+      if (!targetTrip) return;
+
+      const { error } = await supabase
+        .from("trips")
+        .update({
           status: "Completed",
-          endDate: TODAY,
-          fuelConsumed: parseInt(completeForm.fuelLiters),
+          "endDate": TODAY,
+          "fuelConsumed": parseInt(completeForm.fuelLiters),
           revenue: parseInt(completeForm.revenue),
-          endOdometer: finalOdom
-        };
-      }
-      return t;
-    });
+          "endOdometer": finalOdom
+        })
+        .eq("id", completeForm.tripId);
+      if (error) throw error;
 
-    // 2. Release driver and vehicle
-    const targetTrip = trips.find(t => t.id === completeForm.tripId);
-    const updatedVehicles = vehicles.map(v => v.id === completeForm.vehicleId ? { ...v, status: "Available", odometer: finalOdom } : v);
-    const updatedDrivers = drivers.map(d => d.id === targetTrip.driverId ? { ...d, status: "Available" } : d);
+      await supabase.from("vehicles").update({ status: "Available", odometer: finalOdom }).eq("id", completeForm.vehicleId);
+      await supabase.from("drivers").update({ status: "Available" }).eq("id", targetTrip.driverId);
 
-    // 3. Log Fuel Expense
-    const listExpenses = [...expenses];
-    const nextExpId = `EXP-${3001 + listExpenses.length}`;
-    listExpenses.push({
-      id: nextExpId,
-      vehicleId: completeForm.vehicleId,
-      type: "Fuel",
-      amount: parseInt(completeForm.fuelCost),
-      date: TODAY,
-      quantity: parseInt(completeForm.fuelLiters),
-      notes: `Auto log fuel from delivery completion: ${completeForm.tripId}. ${completeForm.notes}`
-    });
+      const nextExpId = `EXP-${3001 + expenses.length}`;
+      await supabase.from("expenses").insert([{
+        id: nextExpId,
+        "vehicleId": completeForm.vehicleId,
+        type: "Fuel",
+        amount: parseInt(completeForm.fuelCost),
+        date: TODAY,
+        quantity: parseInt(completeForm.fuelLiters),
+        notes: `Auto log fuel from delivery: ${completeForm.tripId}. ${completeForm.notes}`
+      }]);
 
-    syncDb("trips", updatedTrips, setTrips);
-    syncDb("vehicles", updatedVehicles, setVehicles);
-    syncDb("drivers", updatedDrivers, setDrivers);
-    syncDb("expenses", listExpenses, setExpenses);
-    
-    setActiveModal(null);
+      setActiveModal(null);
+      await loadData();
+    } catch (err) {
+      alert("Error completing trip: " + err.message);
+    }
   };
 
-  // 12. Maintenance CRUD
+  // 13. Maintenance CRUD
   const openMaintenanceModal = () => {
     setMaintForm({ vehicleId: "", description: "", type: "Routine", cost: "", startDate: TODAY, status: "Active" });
     setActiveModal("maintenance");
   };
 
-  const submitMaintenance = (e) => {
+  const submitMaintenance = async (e) => {
     e.preventDefault();
-    const list = [...maintenance];
     const { vehicleId, description, type, cost, startDate, status } = maintForm;
 
-    // Check status transition
-    if (status === "Active") {
-      const updatedVehicles = vehicles.map(v => v.id === vehicleId ? { ...v, status: "In Shop" } : v);
-      syncDb("vehicles", updatedVehicles, setVehicles);
+    try {
+      const nextId = `MAINT-${2001 + maintenance.length}`;
+      const { error } = await supabase.from("maintenance").insert([{
+        id: nextId,
+        "vehicleId": vehicleId,
+        description,
+        type,
+        cost: parseInt(cost),
+        "startDate": startDate,
+        "endDate": status === "Closed" ? startDate : null,
+        status
+      }]);
+      if (error) throw error;
+
+      if (status === "Active") {
+        await supabase.from("vehicles").update({ status: "In Shop" }).eq("id", vehicleId);
+      }
+
+      if (status === "Closed") {
+        const nextExpId = `EXP-${3001 + expenses.length}`;
+        await supabase.from("expenses").insert([{
+          id: nextExpId,
+          "vehicleId": vehicleId,
+          type: "Maintenance",
+          amount: parseInt(cost),
+          date: startDate,
+          quantity: 0,
+          notes: `Repair cost for ${nextId}: ${description}`
+        }]);
+      }
+
+      setActiveModal(null);
+      await loadData();
+    } catch (err) {
+      alert("Error saving maintenance: " + err.message);
     }
-
-    const nextId = `MAINT-${2001 + list.length}`;
-    list.push({
-      id: nextId,
-      vehicleId, description, type, cost: parseInt(cost), startDate,
-      endDate: status === "Closed" ? startDate : "",
-      status
-    });
-
-    // If Closed immediately, auto expense it
-    if (status === "Closed") {
-      const listExpenses = [...expenses];
-      const nextExpId = `EXP-${3001 + listExpenses.length}`;
-      listExpenses.push({
-        id: nextExpId,
-        vehicleId,
-        type: "Maintenance",
-        amount: parseInt(cost),
-        date: startDate,
-        quantity: 0,
-        notes: `Repair cost for ${nextId}: ${description}`
-      });
-      syncDb("expenses", listExpenses, setExpenses);
-    }
-
-    syncDb("maintenance", list, setMaintenance);
-    setActiveModal(null);
   };
 
-  const resolveMaintenance = (log) => {
+  const resolveMaintenance = async (log) => {
     if (confirm(`Mark maintenance ${log.id} as completed? Vehicle will be released back to Available pool.`)) {
-      const updatedMaint = maintenance.map(m => {
-        if (m.id === log.id) {
-          return { ...m, status: "Closed", endDate: TODAY };
-        }
-        return m;
-      });
+      try {
+        const { error } = await supabase.from("maintenance").update({ status: "Closed", "endDate": TODAY }).eq("id", log.id);
+        if (error) throw error;
 
-      // Release vehicle (unless retired)
-      const v = vehicles.find(v => v.id === log.vehicleId);
-      const nextStatus = v && v.status === "Retired" ? "Retired" : "Available";
-      const updatedVehicles = vehicles.map(v => v.id === log.vehicleId ? { ...v, status: nextStatus } : v);
+        const v = vehicles.find(item => item.id === log.vehicleId);
+        const nextStatus = v && v.status === "Retired" ? "Retired" : "Available";
+        await supabase.from("vehicles").update({ status: nextStatus }).eq("id", log.vehicleId);
 
-      // Log Maintenance Expense
-      const listExpenses = [...expenses];
-      const nextExpId = `EXP-${3001 + listExpenses.length}`;
-      listExpenses.push({
-        id: nextExpId,
-        vehicleId: log.vehicleId,
-        type: "Maintenance",
-        amount: log.cost,
-        date: TODAY,
-        quantity: 0,
-        notes: `Resolution expense for ${log.id}. Details: ${log.description}`
-      });
+        const nextExpId = `EXP-${3001 + expenses.length}`;
+        await supabase.from("expenses").insert([{
+          id: nextExpId,
+          "vehicleId": log.vehicleId,
+          type: "Maintenance",
+          amount: log.cost,
+          date: TODAY,
+          quantity: 0,
+          notes: `Resolution expense for ${log.id}. Details: ${log.description}`
+        }]);
 
-      syncDb("maintenance", updatedMaint, setMaintenance);
-      syncDb("vehicles", updatedVehicles, setVehicles);
-      syncDb("expenses", listExpenses, setExpenses);
+        await loadData();
+      } catch (err) {
+        alert("Error resolving maintenance: " + err.message);
+      }
     }
   };
 
-  // 13. Expense CRUD
+  // 14. Expense CRUD
   const openExpenseModal = () => {
     setExpenseForm({ vehicleId: "", type: "Fuel", amount: "", date: TODAY, quantity: "", notes: "" });
     setActiveModal("expense");
   };
 
-  const submitExpense = (e) => {
+  const submitExpense = async (e) => {
     e.preventDefault();
-    const list = [...expenses];
     const { vehicleId, type, amount, date, quantity, notes } = expenseForm;
 
-    const nextId = `EXP-${3001 + list.length}`;
-    list.push({
-      id: nextId,
-      vehicleId,
-      type,
-      amount: parseInt(amount),
-      date,
-      quantity: type === "Fuel" ? parseInt(quantity) : 0,
-      notes
-    });
+    try {
+      const nextId = `EXP-${3001 + expenses.length}`;
+      const { error } = await supabase.from("expenses").insert([{
+        id: nextId,
+        "vehicleId": vehicleId,
+        type,
+        amount: parseInt(amount),
+        date,
+        quantity: type === "Fuel" ? parseInt(quantity) : 0,
+        notes
+      }]);
+      if (error) throw error;
 
-    syncDb("expenses", list, setExpenses);
-    setActiveModal(null);
-  };
-
-  const deleteExpense = (id) => {
-    if (confirm(`Remove expense record ${id}?`)) {
-      const list = expenses.filter(e => e.id !== id);
-      syncDb("expenses", list, setExpenses);
+      setActiveModal(null);
+      await loadData();
+    } catch (err) {
+      alert("Error logging expense: " + err.message);
     }
   };
 
-  // 14. Document Management
+  const deleteExpense = async (id) => {
+    if (confirm(`Remove expense record ${id}?`)) {
+      try {
+        const { error } = await supabase.from("expenses").delete().eq("id", id);
+        if (error) throw error;
+        await loadData();
+      } catch (err) {
+        alert("Error deleting expense: " + err.message);
+      }
+    }
+  };
+
+  // 15. Document Management
   const openDocModal = (vId) => {
     setDocumentForm({ vehicleId: vId, name: "", expiry: "", file: "" });
     setActiveModal("document");
   };
 
-  const submitDoc = (e) => {
+  const submitDoc = async (e) => {
     e.preventDefault();
-    const updatedVehicles = vehicles.map(v => {
-      if (v.id === documentForm.vehicleId) {
-        const docs = v.documents ? [...v.documents] : [];
-        docs.push({
-          name: documentForm.name,
-          expiry: documentForm.expiry,
-          file: documentForm.file
-        });
-        return { ...v, documents: docs };
-      }
-      return v;
-    });
-
-    syncDb("vehicles", updatedVehicles, setVehicles);
-    setDocumentForm({ ...documentForm, name: "", expiry: "", file: "" });
-  };
-
-  const deleteDoc = (vId, docIdx) => {
-    if (confirm("Remove this document?")) {
-      const updatedVehicles = vehicles.map(v => {
-        if (v.id === vId && v.documents) {
-          const docs = [...v.documents];
-          docs.splice(docIdx, 1);
-          return { ...v, documents: docs };
-        }
-        return v;
+    try {
+      const v = vehicles.find(item => item.id === documentForm.vehicleId);
+      const docs = v?.documents ? [...v.documents] : [];
+      docs.push({
+        name: documentForm.name,
+        expiry: documentForm.expiry,
+        file: documentForm.file
       });
-      syncDb("vehicles", updatedVehicles, setVehicles);
+
+      const { error } = await supabase.from("vehicles").update({ documents: docs }).eq("id", documentForm.vehicleId);
+      if (error) throw error;
+
+      setDocumentForm({ ...documentForm, name: "", expiry: "", file: "" });
+      await loadData();
+    } catch (err) {
+      alert("Error adding document: " + err.message);
     }
   };
 
-  // 15. Reports Data Exporters
+  const deleteDoc = async (vId, docIdx) => {
+    if (confirm("Remove this document?")) {
+      try {
+        const v = vehicles.find(item => item.id === vId);
+        if (v && v.documents) {
+          const docs = [...v.documents];
+          docs.splice(docIdx, 1);
+          const { error } = await supabase.from("vehicles").update({ documents: docs }).eq("id", vId);
+          if (error) throw error;
+        }
+        await loadData();
+      } catch (err) {
+        alert("Error removing document: " + err.message);
+      }
+    }
+  };
+
+  // 16. Reports Exporters
   const exportReportsToCSV = () => {
     const rows = [
       ["Vehicle ID", "Acquisition Cost", "Distance (km)", "Fuel Consumed (L)", "Fuel Economy (km/L)", "Fuel Cost ($)", "Maintenance Cost ($)", "Total Expense ($)", "Total Revenue ($)", "Net ROI (%)"]
@@ -863,9 +935,7 @@ export default function Home() {
       ]);
     });
     
-    let csvContent = "data:text/csv;charset=utf-8," 
-        + rows.map(e => e.join(",")).join("\n");
-        
+    let csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -879,67 +949,98 @@ export default function Home() {
     window.print();
   };
 
-  // 16. Login Authentication Guard
+  // 17. Authentication Guard View
   if (!currentUser) {
     return (
       <div id="login-screen">
-        <div className="login-card">
+        <div className="login-card" style={{ maxWidth: "460px" }}>
+          
           <div className="login-header">
             <div className="logo-container" style={{ justifyContent: "center", marginBottom: "12px" }}>
               <div className="logo-icon">T</div>
               <span className="logo-text" style={{ color: "var(--text-primary)", WebkitTextFillColor: "initial" }}>TransitOps</span>
             </div>
-            <h2>Sign In</h2>
-            <p>Smart Transport Operations Platform</p>
+            <h2>{loginTab === "signin" ? "Sign In" : "Register Profile"}</h2>
+            <p>Smart Transport Operations Platform &bull; Supabase Auth</p>
           </div>
+
+          {loginSuccess && (
+            <div className="alert-banner" style={{ background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.4)", color: "#10b981", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "20px", height: "20px", flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span style={{ fontSize: "13px", lineHeight: "1.4" }}>{loginSuccess}</span>
+              </div>
+              <button type="button" onClick={() => setLoginSuccess("")} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: "18px", fontWeight: 700, padding: "0 4px", display: "flex", alignItems: "center" }}>&times;</button>
+            </div>
+          )}
 
           {loginError && (
             <div className="alert-banner" id="login-error">
-              <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+              <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
               <span>{loginError}</span>
             </div>
           )}
 
-          <form onSubmit={handleLoginSubmit}>
-            <div className="form-group">
-              <label>Email Address</label>
-              <input type="email" className="form-control" placeholder="manager@transitops.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
-            </div>
-            <div className="form-group">
-              <label>Password</label>
-              <input type="password" className="form-control" placeholder="••••••••" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
-            </div>
-            <button type="submit" className="btn btn-primary w-full" style={{ height: "44px", marginTop: "8px" }}>Login</button>
-          </form>
-
-          <div className="login-demo-accounts">
-            <label>Demo Quick-Select Account:</label>
-            <select value={demoAccount} onChange={e => handleDemoSelect(e.target.value)}>
-              <option value="">-- Choose Profile --</option>
-              <option value="manager@transitops.com|password123">Sarah (Fleet Manager)</option>
-              <option value="driver@transitops.com|password123">Alex (Driver)</option>
-              <option value="safety@transitops.com|password123">Ripley (Safety Officer)</option>
-              <option value="finance@transitops.com|password123">Bruce (Financial Analyst)</option>
-            </select>
-          </div>
+          {/* SIGN IN FORM */}
+          {loginTab === "signin" ? (
+            <form onSubmit={handleLoginSubmit}>
+              <div className="form-group">
+                <label>Email Address</label>
+                <input type="email" className="form-control" placeholder="manager@transitops.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label>Password</label>
+                <input type="password" className="form-control" placeholder="••••••••" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required />
+              </div>
+              <button type="submit" className="btn btn-primary w-full" style={{ height: "44px", marginTop: "8px" }}>Login</button>
+              
+              <p style={{ textAlign: "center", fontSize: "12px", marginTop: "12px", color: "var(--text-secondary)" }}>
+                Don't have an account? <span onClick={() => { setLoginTab("signup"); setLoginError(""); setLoginSuccess(""); }} style={{ color: "var(--accent-primary)", cursor: "pointer", fontWeight: 600 }}>Sign up here</span>
+              </p>
+            </form>
+          ) : (
+            // SIGN UP FORM
+            <form onSubmit={handleSignUpSubmit}>
+              <div className="form-group">
+                <label>Full Name</label>
+                <input type="text" className="form-control" placeholder="Alex Mercer" value={signupForm.name} onChange={e => setSignupForm({ ...signupForm, name: e.target.value })} required />
+              </div>
+              <div className="form-group">
+                <label>Email Address</label>
+                <input type="email" className="form-control" placeholder="alex@transitops.com" value={signupForm.email} onChange={e => setSignupForm({ ...signupForm, email: e.target.value })} required />
+              </div>
+              <div className="form-group">
+                <label>Password</label>
+                <input type="password" className="form-control" placeholder="Min. 6 characters" value={signupForm.password} onChange={e => setSignupForm({ ...signupForm, password: e.target.value })} required minLength="6" />
+              </div>
+              <div className="form-group">
+                <label>Choose Role (RBAC Claim)</label>
+                <select className="form-control" value={signupForm.role} onChange={e => setSignupForm({ ...signupForm, role: e.target.value })} required>
+                  <option value="Fleet Manager">Fleet Manager</option>
+                  <option value="Driver">Driver</option>
+                  <option value="Safety Officer">Safety Officer</option>
+                  <option value="Financial Analyst">Financial Analyst</option>
+                </select>
+              </div>
+              <button type="submit" className="btn btn-success w-full" style={{ height: "44px", marginTop: "8px" }}>Create Profile</button>
+              
+              <p style={{ textAlign: "center", fontSize: "12px", marginTop: "12px", color: "var(--text-secondary)" }}>
+                Already registered? <span onClick={() => { setLoginTab("signin"); setLoginError(""); setLoginSuccess(""); }} style={{ color: "var(--accent-primary)", cursor: "pointer", fontWeight: 600 }}>Login here</span>
+              </p>
+            </form>
+          )}
         </div>
       </div>
     );
   }
 
   // -----------------------------------------------------------------
-  // KPI CALCULATIONS FOR VIEW INJECTIONS
+  // KPI CALCULATIONS FOR VIEW INJECTIONS (ROLE-BASED)
   // -----------------------------------------------------------------
-  const activeVehiclesCount = vehicles.filter(v => v.status === "On Trip").length;
-  const availableVehiclesCount = vehicles.filter(v => v.status === "Available").length;
-  const inShopVehiclesCount = vehicles.filter(v => v.status === "In Shop").length;
-  const activeTripsCount = trips.filter(t => t.status === "Dispatched").length;
-  const pendingTripsCount = trips.filter(t => t.status === "Draft").length;
-  const driversOnDutyCount = drivers.filter(d => d.status === "Available" || d.status === "On Trip").length;
   const operableFleetCount = vehicles.filter(v => v.status !== "Retired").length;
+  const activeVehiclesCount = vehicles.filter(v => v.status === "On Trip").length;
   const utilPct = operableFleetCount > 0 ? Math.round((activeVehiclesCount / operableFleetCount) * 100) : 0;
 
-  // Filter lists based on Search queries
   const searchedVehicles = vehicles.filter(v => {
     const matchQ = v.id.toLowerCase().includes(vehicleSearch.toLowerCase()) || v.name.toLowerCase().includes(vehicleSearch.toLowerCase());
     const matchT = vehicleTypeFilter === "All" || v.type === vehicleTypeFilter;
@@ -949,6 +1050,31 @@ export default function Home() {
   const searchedDrivers = drivers.filter(d => {
     return d.name.toLowerCase().includes(driverSearch.toLowerCase()) || d.licenseNumber.toLowerCase().includes(driverSearch.toLowerCase());
   });
+
+  // Customized KPI values based on Role
+  const isDriver = currentUser.role === "Driver";
+  const isSafetyOfficer = currentUser.role === "Safety Officer";
+  const isFinancialAnalyst = currentUser.role === "Financial Analyst";
+
+  const activeTripsCount = isDriver
+    ? displayTrips.filter(t => t.status === "Dispatched").length
+    : trips.filter(t => t.status === "Dispatched").length;
+
+  const pendingTripsCount = isDriver
+    ? displayTrips.filter(t => t.status === "Draft").length
+    : trips.filter(t => t.status === "Draft").length;
+
+  const totalOdometerRun = isDriver
+    ? displayTrips.filter(t => t.status === "Completed").reduce((sum, t) => sum + t.distance, 0)
+    : vehicles.reduce((sum, v) => sum + v.odometer, 0);
+
+  const averageSafetyScore = drivers.length > 0
+    ? Math.round(drivers.reduce((sum, d) => sum + d.safetyScore, 0) / drivers.length)
+    : 100;
+
+  const driverSafetyMetric = isDriver
+    ? (myDriverProfile ? myDriverProfile.safetyScore : 100)
+    : averageSafetyScore;
 
   return (
     <div id="app-layout">
@@ -1043,7 +1169,7 @@ export default function Home() {
           <div className="header-controls">
             {/* Alerts Bell */}
             <button className="notifications-btn" onClick={() => setShowNotifications(!showNotifications)}>
-              <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ width: "20px", height: "20px" }}><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+              <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ width: "20px", height: "20px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
               {alerts.length > 0 && <span className="badge">{alerts.length}</span>}
             </button>
 
@@ -1080,75 +1206,178 @@ export default function Home() {
         </header>
 
         <div className="content-panel">
+          {/* Missing SQL Schema Alert Warning */}
+          {schemaError && (
+            <div className="alert-banner" style={{ marginBottom: "20px" }}>
+              <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+              <span>
+                <strong>Database Setup Required:</strong> The Supabase tables are missing from your database. Please execute the SQL schema script located in <strong>[supabase_schema.sql](file:///C:/Users/rambh/Downloads/TransitOps-Smart-Transport-Operations-Platform/supabase_schema.sql)</strong> inside your Supabase SQL Editor.
+              </span>
+            </div>
+          )}
+
           {/* ========================================================= */}
           {/* DASHBOARD VIEW */}
           {/* ========================================================= */}
           {currentView === "dashboard" && (
             <div>
+              {/* Header Title Filter Panel */}
               <div className="glass-card d-flex justify-between align-center" style={{ padding: "16px", marginBottom: "24px" }}>
-                <h3 style={{ fontWeight: 700, fontSize: "15px" }}>Fleet Metrics</h3>
-                <div className="d-flex align-center gap-12">
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>Filter Vehicle Type:</label>
-                  <select className="form-control" style={{ width: "200px", padding: "6px 12px" }} value={dashboardFilter} onChange={e => setDashboardFilter(e.target.value)}>
-                    <option value="All">All Vehicles</option>
-                    {[...new Set(vehicles.map(v => v.type))].map(type => (
-                      <option key={type} value={type}>{type}s Only</option>
-                    ))}
-                  </select>
-                </div>
+                <h3 style={{ fontWeight: 700, fontSize: "15px" }}>Welcome Back, {currentUser.name}!</h3>
+                {!isDriver && !isSafetyOfficer && (
+                  <div className="d-flex align-center gap-12">
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>Filter Vehicle Type:</label>
+                    <select className="form-control" style={{ width: "200px", padding: "6px 12px" }} value={dashboardFilter} onChange={e => setDashboardFilter(e.target.value)}>
+                      <option value="All">All Vehicles</option>
+                      {[...new Set(vehicles.map(v => v.type))].map(type => (
+                        <option key={type} value={type}>{type}s Only</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               {alerts.some(a => a.type === "danger") && (
                 <div className="alert-banner">
-                  <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                  <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                   <div>
                     <strong>Compliance Warning:</strong> Urgent driver safety or vehicle documents expired! Check alerts bell.
                   </div>
                 </div>
               )}
 
+              {/* ROLE BASED KPI GRID */}
               <div className="kpi-grid">
-                <div className="kpi-card kpi-info">
-                  <span className="kpi-label">Active Deliveries</span>
-                  <span className="kpi-val">{activeTripsCount}</span>
-                  <span className="kpi-sub">{pendingTripsCount} Draft Trips Saved</span>
-                </div>
-                <div className="kpi-card kpi-available">
-                  <span className="kpi-label">Available Vehicles</span>
-                  <span className="kpi-val">{availableVehiclesCount}</span>
-                  <span className="kpi-sub">Out of {vehicles.length} Total Fleet</span>
-                </div>
-                <div className="kpi-card kpi-maintenance">
-                  <span className="kpi-label">Vehicles in Shop</span>
-                  <span className="kpi-val">{inShopVehiclesCount}</span>
-                  <span className="kpi-sub">Active Maintenance</span>
-                </div>
-                <div className="kpi-card kpi-danger">
-                  <span className="kpi-label">Drivers On Duty</span>
-                  <span className="kpi-val">{driversOnDutyCount}</span>
-                  <span className="kpi-sub">From {drivers.length} Drivers</span>
-                </div>
-                <div className="kpi-card kpi-info" style={{ alignItems: "center", justifyContent: "center", textAlign: "center" }}>
-                  <span className="kpi-label">Fleet Utilization</span>
-                  <span className="kpi-val" style={{ color: "var(--accent-primary)" }}>{utilPct}%</span>
-                  <span className="kpi-sub">Active vs Operable Fleet</span>
-                </div>
+                {/* 1. DRIVER DASHBOARD */}
+                {isDriver && (
+                  <>
+                    <div className="kpi-card kpi-info">
+                      <span className="kpi-label">My Active Deliveries</span>
+                      <span className="kpi-val">{displayTrips.filter(t => t.status === "Dispatched").length}</span>
+                      <span className="kpi-sub">{displayTrips.filter(t => t.status === "Draft").length} Draft Assignments</span>
+                    </div>
+                    <div className="kpi-card kpi-available">
+                      <span className="kpi-label">My Odometer Run</span>
+                      <span className="kpi-val">{totalOdometerRun.toLocaleString()} km</span>
+                      <span className="kpi-sub">Total distance completed</span>
+                    </div>
+                    <div className="kpi-card kpi-danger">
+                      <span className="kpi-label">My Safety Score</span>
+                      <span className="kpi-val" style={{ color: driverSafetyMetric < 70 ? "var(--danger)" : "var(--success)" }}>{driverSafetyMetric}%</span>
+                      <span className="kpi-sub">License Class: {myDriverProfile ? myDriverProfile.licenseCategory : 'N/A'}</span>
+                    </div>
+                    <div className="kpi-card kpi-maintenance">
+                      <span className="kpi-label">My Duty Status</span>
+                      <span className="kpi-val" style={{ color: "var(--accent-primary)" }}>{myDriverProfile ? myDriverProfile.status : 'Available'}</span>
+                      <span className="kpi-sub">Updated by Safety Officers</span>
+                    </div>
+                  </>
+                )}
+
+                {/* 2. SAFETY OFFICER DASHBOARD */}
+                {isSafetyOfficer && (
+                  <>
+                    <div className="kpi-card kpi-available">
+                      <span className="kpi-label">Active Drivers</span>
+                      <span className="kpi-val">{drivers.filter(d => d.status !== "Suspended").length}</span>
+                      <span className="kpi-sub">Out of {drivers.length} total profiles</span>
+                    </div>
+                    <div className="kpi-card kpi-info">
+                      <span className="kpi-label">Fleet Safety Score</span>
+                      <span className="kpi-val">{driverSafetyMetric}%</span>
+                      <span className="kpi-sub">Average across active drivers</span>
+                    </div>
+                    <div className="kpi-card kpi-danger">
+                      <span className="kpi-label">License Alerts</span>
+                      <span className="kpi-val">{alerts.filter(a => a.title.includes("License")).length}</span>
+                      <span className="kpi-sub">Expired or expiring soon</span>
+                    </div>
+                    <div className="kpi-card kpi-maintenance">
+                      <span className="kpi-label">Pending Compliance Logs</span>
+                      <span className="kpi-val">{alerts.length}</span>
+                      <span className="kpi-sub">Total critical notifications</span>
+                    </div>
+                  </>
+                )}
+
+                {/* 3. FINANCIAL ANALYST DASHBOARD */}
+                {isFinancialAnalyst && (
+                  <>
+                    <div className="kpi-card kpi-available">
+                      <span className="kpi-label">YTD Operating Revenue</span>
+                      <span className="kpi-val">${trips.filter(t => t.status === "Completed").reduce((sum, t) => sum + (t.revenue || 0), 0).toLocaleString()}</span>
+                      <span className="kpi-sub">From completed deliveries</span>
+                    </div>
+                    <div className="kpi-card kpi-danger">
+                      <span className="kpi-label">Operating Expenses</span>
+                      <span className="kpi-val">${expenses.reduce((sum, e) => sum + e.amount, 0).toLocaleString()}</span>
+                      <span className="kpi-sub">Fuel + Shop Repairs</span>
+                    </div>
+                    <div className="kpi-card kpi-info">
+                      <span className="kpi-label">Net Operational Profit</span>
+                      <span className="kpi-val">${(trips.filter(t => t.status === "Completed").reduce((sum, t) => sum + (t.revenue || 0), 0) - expenses.reduce((sum, e) => sum + e.amount, 0)).toLocaleString()}</span>
+                      <span className="kpi-sub">Cumulative Profit Margin</span>
+                    </div>
+                    <div className="kpi-card kpi-maintenance">
+                      <span className="kpi-label">Log Invoiced Routes</span>
+                      <span className="kpi-val">{trips.filter(t => t.status === "Completed").length}</span>
+                      <span className="kpi-sub">Closed trip ledger entries</span>
+                    </div>
+                  </>
+                )}
+
+                {/* 4. FLEET MANAGER DASHBOARD (ALL DATA SUMMARY) */}
+                {!isDriver && !isSafetyOfficer && !isFinancialAnalyst && (
+                  <>
+                    <div className="kpi-card kpi-info">
+                      <span className="kpi-label">Active Deliveries</span>
+                      <span className="kpi-val">{activeTripsCount}</span>
+                      <span className="kpi-sub">{pendingTripsCount} Draft Trips Saved</span>
+                    </div>
+                    <div className="kpi-card kpi-available">
+                      <span className="kpi-label">Available Vehicles</span>
+                      <span className="kpi-val">{vehicles.filter(v => v.status === "Available").length}</span>
+                      <span className="kpi-sub">Out of {vehicles.length} Total Fleet</span>
+                    </div>
+                    <div className="kpi-card kpi-maintenance">
+                      <span className="kpi-label">Vehicles in Shop</span>
+                      <span className="kpi-val">{vehicles.filter(v => v.status === "In Shop").length}</span>
+                      <span className="kpi-sub">Active Maintenance</span>
+                    </div>
+                    <div className="kpi-card kpi-danger">
+                      <span className="kpi-label">Drivers On Duty</span>
+                      <span className="kpi-val">{drivers.filter(d => d.status === "Available" || d.status === "On Trip").length}</span>
+                      <span className="kpi-sub">From {drivers.length} Drivers</span>
+                    </div>
+                    <div className="kpi-card kpi-info" style={{ alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+                      <span className="kpi-label">Fleet Utilization</span>
+                      <span className="kpi-val" style={{ color: "var(--accent-primary)" }}>{utilPct}%</span>
+                      <span className="kpi-sub">Active vs Operable Fleet</span>
+                    </div>
+                  </>
+                )}
               </div>
 
-              <div className="dashboard-grid">
-                <div className="glass-card chart-card">
-                  <h3 style={{ fontSize: "15px", fontWeight: 700, marginBottom: "20px" }}>Financial Trends (YTD Performance)</h3>
-                  <div style={{ height: "calc(100% - 40px)" }}><canvas id="canvasFinancial"></canvas></div>
+              {/* GRAPH PLOTS (ROLE FILTERED) */}
+              {!isDriver && !isSafetyOfficer && (
+                <div className="dashboard-grid">
+                  <div className="glass-card chart-card">
+                    <h3 style={{ fontSize: "15px", fontWeight: 700, marginBottom: "20px" }}>Financial Trends (YTD Performance)</h3>
+                    <div style={{ height: "calc(100% - 40px)" }}><canvas id="canvasFinancial"></canvas></div>
+                  </div>
+                  <div className="glass-card chart-card">
+                    <h3 style={{ fontSize: "15px", fontWeight: 700, marginBottom: "20px" }}>Fleet Status Distribution</h3>
+                    <div style={{ height: "calc(100% - 40px)", display: "flex", justifyContent: "center", alignItems: "center" }}><canvas id="canvasDistribution"></canvas></div>
+                  </div>
                 </div>
-                <div className="glass-card chart-card">
-                  <h3 style={{ fontSize: "15px", fontWeight: 700, marginBottom: "20px" }}>Fleet Status Distribution</h3>
-                  <div style={{ height: "calc(100% - 40px)", display: "flex", justifyContent: "center", alignItems: "center" }}><canvas id="canvasDistribution"></canvas></div>
-                </div>
-              </div>
+              )}
 
+              {/* DISPATCH LIST OR ASSIGNED DRIVER LIST */}
               <div className="glass-card">
                 <div className="d-flex justify-between align-center" style={{ marginBottom: "16px" }}>
-                  <h3 style={{ fontSize: "15px", fontWeight: 700 }}>Live Dispatch Board</h3>
+                  <h3 style={{ fontSize: "15px", fontWeight: 700 }}>
+                    {isDriver ? "My Current Assigned Trips" : "Live Dispatch Board"}
+                  </h3>
                   {hasAccess("trips", "create") && <button className="btn btn-primary" onClick={openTripModal}>Dispatch Wizard</button>}
                 </div>
                 <div className="table-responsive">
@@ -1164,20 +1393,26 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody>
-                      {trips.slice(-4).reverse().map(trip => (
-                        <tr key={trip.id}>
-                          <td style={{ fontWeight: 700, color: "var(--text-primary)" }}>{trip.id}</td>
-                          <td>{trip.source} &rarr; {trip.destination}</td>
-                          <td>{trip.vehicleId || <span style={{ color: "var(--text-muted)" }}>Unassigned</span>}</td>
-                          <td>{trip.driverId ? (drivers.find(d => d.id === trip.driverId)?.name || trip.driverId) : <span style={{ color: "var(--text-muted)" }}>Unassigned</span>}</td>
-                          <td>{trip.cargoWeight} kg</td>
-                          <td>
-                            <span className={`badge ${trip.status === 'Completed' ? 'badge-completed' : trip.status === 'Cancelled' ? 'badge-cancelled' : trip.status === 'Dispatched' ? 'badge-dispatched' : 'badge-draft'}`}>
-                              {trip.status}
-                            </span>
-                          </td>
+                      {displayTrips.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" style={{ textAlign: "center", color: "var(--text-muted)", padding: "20px" }}>No trips registered or assigned.</td>
                         </tr>
-                      ))}
+                      ) : (
+                        displayTrips.slice(-4).reverse().map(trip => (
+                          <tr key={trip.id}>
+                            <td style={{ fontWeight: 700, color: "var(--text-primary)" }}>{trip.id}</td>
+                            <td>{trip.source} &rarr; {trip.destination}</td>
+                            <td>{trip.vehicleId || <span style={{ color: "var(--text-muted)" }}>Unassigned</span>}</td>
+                            <td>{trip.driverId ? (drivers.find(d => d.id === trip.driverId)?.name || trip.driverId) : <span style={{ color: "var(--text-muted)" }}>Unassigned</span>}</td>
+                            <td>{trip.cargoWeight} kg</td>
+                            <td>
+                              <span className={`badge ${trip.status === 'Completed' ? 'badge-completed' : trip.status === 'Cancelled' ? 'badge-cancelled' : trip.status === 'Dispatched' ? 'badge-dispatched' : 'badge-draft'}`}>
+                                {trip.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1214,58 +1449,62 @@ export default function Home() {
               </div>
 
               <div className="vehicle-grid">
-                {searchedVehicles.map(v => {
-                  const docCount = v.documents ? v.documents.length : 0;
-                  const expiredDocs = v.documents ? v.documents.filter(d => d.expiry < TODAY).length : 0;
-                  return (
-                    <div key={v.id} className="entity-card">
-                      <div className="card-header">
+                {searchedVehicles.length === 0 ? (
+                  <div style={{ color: "var(--text-muted)", gridColumn: "1/-1", textAlign: "center", padding: "40px" }}>No vehicles registered.</div>
+                ) : (
+                  searchedVehicles.map(v => {
+                    const docCount = v.documents ? v.documents.length : 0;
+                    const expiredDocs = v.documents ? v.documents.filter(d => d.expiry < TODAY).length : 0;
+                    return (
+                      <div key={v.id} className="entity-card">
+                        <div className="card-header">
+                          <div>
+                            <div className="title">{v.name}</div>
+                            <div className="subtitle">{v.type} &bull; Reg: <strong>{v.id}</strong></div>
+                          </div>
+                          <span className={`badge ${v.status === 'Available' ? 'badge-available' : v.status === 'On Trip' ? 'badge-ontrip' : v.status === 'In Shop' ? 'badge-inshop' : 'badge-retired'}`}>{v.status}</span>
+                        </div>
+
                         <div>
-                          <div className="title">{v.name}</div>
-                          <div className="subtitle">{v.type} &bull; Reg: <strong>{v.id}</strong></div>
+                          <div className="details-row">
+                            <span>Max Payload:</span>
+                            <span>{v.maxCapacity} kg</span>
+                          </div>
+                          <div className="details-row">
+                            <span>Odometer:</span>
+                            <span>{v.odometer.toLocaleString()} km</span>
+                          </div>
+                          <div className="details-row">
+                            <span>Acquisition Cost:</span>
+                            <span>${v.cost.toLocaleString()}</span>
+                          </div>
+                          <div className="details-row">
+                            <span>Documents:</span>
+                            <span onClick={() => openDocModal(v.id)} style={{ color: "var(--accent-primary)", cursor: "pointer", fontWeight: 600, textDecoration: "underline" }}>
+                              {docCount} Files {expiredDocs > 0 && <span style={{ color: "var(--danger)" }}>({expiredDocs} Expired)</span>}
+                            </span>
+                          </div>
                         </div>
-                        <span className={`badge ${v.status === 'Available' ? 'badge-available' : v.status === 'On Trip' ? 'badge-ontrip' : v.status === 'In Shop' ? 'badge-inshop' : 'badge-retired'}`}>{v.status}</span>
-                      </div>
 
-                      <div>
-                        <div className="details-row">
-                          <span>Max Payload:</span>
-                          <span>{v.maxCapacity} kg</span>
-                        </div>
-                        <div className="details-row">
-                          <span>Odometer:</span>
-                          <span>{v.odometer.toLocaleString()} km</span>
-                        </div>
-                        <div className="details-row">
-                          <span>Acquisition Cost:</span>
-                          <span>${v.cost.toLocaleString()}</span>
-                        </div>
-                        <div className="details-row">
-                          <span>Documents:</span>
-                          <span onClick={() => openDocModal(v.id)} style={{ color: "var(--accent-primary)", cursor: "pointer", fontWeight: 600, textDecoration: "underline" }}>
-                            {docCount} Files {expiredDocs > 0 && <span style={{ color: "var(--danger)" }}>({expiredDocs} Expired)</span>}
-                          </span>
+                        <div className="actions">
+                          <button className="btn btn-secondary btn-icon-only" onClick={() => openDocModal(v.id)} title="Certificates">
+                            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "16px", height: "16px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                          </button>
+                          {hasAccess("vehicles", "update") && (
+                            <button className="btn btn-secondary btn-icon-only" onClick={() => openVehicleModal(v)} title="Edit">
+                              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                            </button>
+                          )}
+                          {hasAccess("vehicles", "delete") && (
+                            <button className="btn btn-danger btn-icon-only" onClick={() => deleteVehicle(v.id)} title="Delete">
+                              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                          )}
                         </div>
                       </div>
-
-                      <div className="actions">
-                        <button className="btn btn-secondary btn-icon-only" onClick={() => openDocModal(v.id)} title="Certificates">
-                          <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ width: "16px", height: "16px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                        </button>
-                        {hasAccess("vehicles", "update") && (
-                          <button className="btn btn-secondary btn-icon-only" onClick={() => openVehicleModal(v)} title="Edit">
-                            <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                          </button>
-                        )}
-                        {hasAccess("vehicles", "delete") && (
-                          <button className="btn btn-danger btn-icon-only" onClick={() => deleteVehicle(v.id)} title="Delete">
-                            <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
@@ -1289,66 +1528,74 @@ export default function Home() {
               </div>
 
               <div className="driver-grid">
-                {searchedDrivers.map(d => {
-                  const isExpired = d.licenseExpiry < TODAY;
-                  let scoreColor = "var(--success)";
-                  if (d.safetyScore < 85) scoreColor = "var(--warning)";
-                  if (d.safetyScore < 70) scoreColor = "var(--danger)";
+                {searchedDrivers.length === 0 ? (
+                  <div style={{ color: "var(--text-muted)", gridColumn: "1/-1", textAlign: "center", padding: "40px" }}>No drivers registered.</div>
+                ) : (
+                  searchedDrivers.map(d => {
+                    const isExpired = d.licenseExpiry < TODAY;
+                    let scoreColor = "var(--success)";
+                    if (d.safetyScore < 85) scoreColor = "var(--warning)";
+                    if (d.safetyScore < 70) scoreColor = "var(--danger)";
 
-                  return (
-                    <div key={d.id} className="entity-card">
-                      <div className="card-header">
+                    return (
+                      <div key={d.id} className="entity-card">
+                        <div className="card-header">
+                          <div>
+                            <div className="title">{d.name}</div>
+                            <div className="subtitle">{d.licenseCategory} &bull; Lic: <strong>{d.licenseNumber}</strong></div>
+                          </div>
+                          <span className={`badge ${d.status === 'Available' ? 'badge-available' : d.status === 'On Trip' ? 'badge-ontrip' : d.status === 'Off Duty' ? 'badge-offduty' : 'badge-suspended'}`}>{d.status}</span>
+                        </div>
+
                         <div>
-                          <div className="title">{d.name}</div>
-                          <div className="subtitle">{d.licenseCategory} &bull; Lic: <strong>{d.licenseNumber}</strong></div>
-                        </div>
-                        <span className={`badge ${d.status === 'Available' ? 'badge-available' : d.status === 'On Trip' ? 'badge-ontrip' : d.status === 'Off Duty' ? 'badge-offduty' : 'badge-suspended'}`}>{d.status}</span>
-                      </div>
-
-                      <div>
-                        <div className="details-row">
-                          <span>License Expiry:</span>
-                          <span style={{ fontWeight: 600, color: isExpired ? "var(--danger)" : "var(--text-secondary)" }}>
-                            {d.licenseExpiry} {isExpired && "(EXPIRED)"}
-                          </span>
-                        </div>
-                        <div className="details-row">
-                          <span>Contact Info:</span>
-                          <span>{d.contact}</span>
-                        </div>
-                        
-                        <div className="details-row" style={{ flexDirection: "column", alignItems: "stretch", borderBottom: "none", paddingTop: "10px" }}>
-                          <div className="safety-gauge-container">
-                            <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Safety Performance:</span>
-                            <span style={{ fontWeight: 700, color: scoreColor, fontSize: "12px" }}>{d.safetyScore}%</span>
+                          <div className="details-row">
+                            <span>License Expiry:</span>
+                            <span style={{ fontWeight: 600, color: isExpired ? "var(--danger)" : "var(--text-secondary)" }}>
+                              {d.licenseExpiry} {isExpired && "(EXPIRED)"}
+                            </span>
                           </div>
-                          <div className="safety-gauge-bar">
-                            <div className="safety-gauge-fill" style={{ width: `${d.safetyScore}%`, backgroundColor: scoreColor }}></div>
+                          <div className="details-row">
+                            <span>Contact Info:</span>
+                            <span>{d.contact}</span>
+                          </div>
+                          <div className="details-row">
+                            <span>Auth Email:</span>
+                            <span>{d.email || <span style={{ color: "var(--text-muted)" }}>None linked</span>}</span>
+                          </div>
+                          
+                          <div className="details-row" style={{ flexDirection: "column", alignItems: "stretch", borderBottom: "none", paddingTop: "10px" }}>
+                            <div className="safety-gauge-container">
+                              <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Safety Performance:</span>
+                              <span style={{ fontWeight: 700, color: scoreColor, fontSize: "12px" }}>{d.safetyScore}%</span>
+                            </div>
+                            <div className="safety-gauge-bar">
+                              <div className="safety-gauge-fill" style={{ width: `${d.safetyScore}%`, backgroundColor: scoreColor }}></div>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="actions">
-                        {hasAccess("drivers", "update") && (
-                          <button className="btn btn-secondary btn-icon-only" onClick={() => openDriverModal(d)} title="Edit">
-                            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                          </button>
-                        )}
-                        {hasAccess("drivers", "delete") && (
-                          <button className="btn btn-danger btn-icon-only" onClick={() => deleteDriver(d.id)} title="Delete">
-                            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                          </button>
-                        )}
+                        <div className="actions">
+                          {hasAccess("drivers", "update") && (
+                            <button className="btn btn-secondary btn-icon-only" onClick={() => openDriverModal(d)} title="Edit">
+                              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                            </button>
+                          )}
+                          {hasAccess("drivers", "delete") && (
+                            <button className="btn btn-danger btn-icon-only" onClick={() => deleteDriver(d.id)} title="Delete">
+                              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
 
           {/* ========================================================= */}
-          {/* TRIP DISPATCHER VIEW */}
+          {/* TRIP MANAGEMENT VIEW */}
           {/* ========================================================= */}
           {currentView === "trips" && (
             <div className="glass-card">
@@ -1374,48 +1621,54 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody>
-                    {trips.map(trip => (
-                      <tr key={trip.id}>
-                        <td style={{ fontWeight: 700, color: "var(--text-primary)" }}>{trip.id}</td>
-                        <td>{trip.source} &rarr; {trip.destination}</td>
-                        <td>
-                          <strong>{trip.vehicleId || "Unassigned"}</strong><br />
-                          <small style={{ color: "var(--text-muted)" }}>{vehicles.find(v => v.id === trip.vehicleId)?.name || ""}</small>
-                        </td>
-                        <td>
-                          <strong>{drivers.find(d => d.id === trip.driverId)?.name || trip.driverId || "Unassigned"}</strong><br />
-                          <small style={{ color: "var(--text-muted)" }}>Safety Score: {drivers.find(d => d.id === trip.driverId)?.safetyScore || "0"}%</small>
-                        </td>
-                        <td>{trip.cargoWeight} kg</td>
-                        <td>{trip.distance} km</td>
-                        <td>${trip.revenue?.toLocaleString()}</td>
-                        <td>
-                          <span className={`badge ${trip.status === 'Completed' ? 'badge-completed' : trip.status === 'Cancelled' ? 'badge-cancelled' : trip.status === 'Dispatched' ? 'badge-dispatched' : 'badge-draft'}`}>
-                            {trip.status}
-                          </span>
-                        </td>
-                        <td>{trip.startDate || "N/A"}</td>
-                        <td>
-                          <div style={{ display: "flex", gap: "6px" }}>
-                            {trip.status === "Dispatched" && hasAccess("trips", "create") && (
-                              <>
-                                <button className="btn btn-success btn-icon-only" onClick={() => openCompleteModal(trip)} title="Complete Delivery">
-                                  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg>
-                                </button>
-                                <button className="btn btn-danger btn-icon-only" onClick={() => cancelTrip(trip.id)} title="Cancel Dispatch">
-                                  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                </button>
-                              </>
-                            )}
-                            {trip.status === "Draft" && hasAccess("trips", "delete") && (
-                              <button className="btn btn-danger btn-icon-only" onClick={() => deleteTrip(trip.id)} title="Delete Draft">
-                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                              </button>
-                            )}
-                          </div>
-                        </td>
+                    {displayTrips.length === 0 ? (
+                      <tr>
+                        <td colSpan="10" style={{ textAlign: "center", color: "var(--text-muted)", padding: "20px" }}>No trips registered.</td>
                       </tr>
-                    ))}
+                    ) : (
+                      displayTrips.map(trip => (
+                        <tr key={trip.id}>
+                          <td style={{ fontWeight: 700, color: "var(--text-primary)" }}>{trip.id}</td>
+                          <td>{trip.source} &rarr; {trip.destination}</td>
+                          <td>
+                            <strong>{trip.vehicleId || "Unassigned"}</strong><br />
+                            <small style={{ color: "var(--text-muted)" }}>{vehicles.find(v => v.id === trip.vehicleId)?.name || ""}</small>
+                          </td>
+                          <td>
+                            <strong>{drivers.find(d => d.id === trip.driverId)?.name || trip.driverId || "Unassigned"}</strong><br />
+                            <small style={{ color: "var(--text-muted)" }}>Safety Score: {drivers.find(d => d.id === trip.driverId)?.safetyScore || "0"}%</small>
+                          </td>
+                          <td>{trip.cargoWeight} kg</td>
+                          <td>{trip.distance} km</td>
+                          <td>${trip.revenue?.toLocaleString()}</td>
+                          <td>
+                            <span className={`badge ${trip.status === 'Completed' ? 'badge-completed' : trip.status === 'Cancelled' ? 'badge-cancelled' : trip.status === 'Dispatched' ? 'badge-dispatched' : 'badge-draft'}`}>
+                              {trip.status}
+                            </span>
+                          </td>
+                          <td>{trip.startDate || "N/A"}</td>
+                          <td>
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              {trip.status === "Dispatched" && hasAccess("trips", "create") && (
+                                <>
+                                  <button className="btn btn-success btn-icon-only" onClick={() => openCompleteModal(trip)} title="Complete Delivery">
+                                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg>
+                                  </button>
+                                  <button className="btn btn-danger btn-icon-only" onClick={() => cancelTrip(trip.id)} title="Cancel Dispatch">
+                                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                  </button>
+                                </>
+                              )}
+                              {trip.status === "Draft" && hasAccess("trips", "delete") && (
+                                <button className="btn btn-danger btn-icon-only" onClick={() => deleteTrip(trip.id)} title="Delete Draft">
+                                  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1448,32 +1701,38 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody>
-                    {maintenance.map(log => (
-                      <tr key={log.id}>
-                        <td style={{ fontWeight: 700, color: "var(--text-primary)" }}>{log.id}</td>
-                        <td>
-                          <strong>{log.vehicleId}</strong><br />
-                          <small style={{ color: "var(--text-muted)" }}>{vehicles.find(v => v.id === log.vehicleId)?.name}</small>
-                        </td>
-                        <td>{log.description}</td>
-                        <td>{log.type}</td>
-                        <td>${log.cost?.toLocaleString()}</td>
-                        <td>{log.startDate}</td>
-                        <td>{log.endDate || <span style={{ color: "var(--text-muted)" }}>In Progress</span>}</td>
-                        <td>
-                          <span className={`badge ${log.status === 'Active' ? 'badge-inshop' : 'badge-completed'}`}>
-                            {log.status === 'Active' ? 'In Shop' : 'Closed'}
-                          </span>
-                        </td>
-                        <td>
-                          {log.status === "Active" && hasAccess("maintenance", "create") && (
-                            <button className="btn btn-success btn-icon-only" onClick={() => resolveMaintenance(log)} title="Mark Finished / Available">
-                              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg>
-                            </button>
-                          )}
-                        </td>
+                    {displayMaintenance.length === 0 ? (
+                      <tr>
+                        <td colSpan="9" style={{ textAlign: "center", color: "var(--text-muted)", padding: "20px" }}>No maintenance logs.</td>
                       </tr>
-                    ))}
+                    ) : (
+                      displayMaintenance.map(log => (
+                        <tr key={log.id}>
+                          <td style={{ fontWeight: 700, color: "var(--text-primary)" }}>{log.id}</td>
+                          <td>
+                            <strong>{log.vehicleId}</strong><br />
+                            <small style={{ color: "var(--text-muted)" }}>{vehicles.find(v => v.id === log.vehicleId)?.name}</small>
+                          </td>
+                          <td>{log.description}</td>
+                          <td>{log.type}</td>
+                          <td>${log.cost?.toLocaleString()}</td>
+                          <td>{log.startDate}</td>
+                          <td>{log.endDate || <span style={{ color: "var(--text-muted)" }}>In Progress</span>}</td>
+                          <td>
+                            <span className={`badge ${log.status === 'Active' ? 'badge-inshop' : 'badge-completed'}`}>
+                              {log.status === 'Active' ? 'In Shop' : 'Closed'}
+                            </span>
+                          </td>
+                          <td>
+                            {log.status === "Active" && hasAccess("maintenance", "create") && (
+                              <button className="btn btn-success btn-icon-only" onClick={() => resolveMaintenance(log)} title="Mark Finished / Available">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"></path></svg>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1505,29 +1764,35 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody>
-                    {expenses.map(exp => (
-                      <tr key={exp.id}>
-                        <td style={{ fontWeight: 700, color: "var(--text-primary)" }}>{exp.id}</td>
-                        <td>
-                          <strong>{exp.vehicleId}</strong><br />
-                          <small style={{ color: "var(--text-muted)" }}>{vehicles.find(v => v.id === exp.vehicleId)?.name}</small>
-                        </td>
-                        <td>{exp.date}</td>
-                        <td>
-                          <span className={`badge ${exp.type === 'Fuel' ? 'badge-ontrip' : 'badge-draft'}`}>{exp.type}</span>
-                        </td>
-                        <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>${exp.amount?.toLocaleString()}</td>
-                        <td>{exp.quantity ? `${exp.quantity} L` : "N/A"}</td>
-                        <td>{exp.notes}</td>
-                        <td>
-                          {hasAccess("expenses", "delete") && (
-                            <button className="btn btn-danger btn-icon-only" onClick={() => deleteExpense(exp.id)} title="Delete Expense">
-                              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                            </button>
-                          )}
-                        </td>
+                    {displayExpenses.length === 0 ? (
+                      <tr>
+                        <td colSpan="8" style={{ textAlign: "center", color: "var(--text-muted)", padding: "20px" }}>No expenses registered.</td>
                       </tr>
-                    ))}
+                    ) : (
+                      displayExpenses.map(exp => (
+                        <tr key={exp.id}>
+                          <td style={{ fontWeight: 700, color: "var(--text-primary)" }}>{exp.id}</td>
+                          <td>
+                            <strong>{exp.vehicleId}</strong><br />
+                            <small style={{ color: "var(--text-muted)" }}>{vehicles.find(v => v.id === exp.vehicleId)?.name}</small>
+                          </td>
+                          <td>{exp.date}</td>
+                          <td>
+                            <span className={`badge ${exp.type === 'Fuel' ? 'badge-ontrip' : 'badge-draft'}`}>{exp.type}</span>
+                          </td>
+                          <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>${exp.amount?.toLocaleString()}</td>
+                          <td>{exp.quantity ? `${exp.quantity} L` : "N/A"}</td>
+                          <td>{exp.notes}</td>
+                          <td>
+                            {hasAccess("expenses", "delete") && (
+                              <button className="btn btn-danger btn-icon-only" onClick={() => deleteExpense(exp.id)} title="Delete Expense">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "15px", height: "15px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1573,11 +1838,11 @@ export default function Home() {
               {/* Exporters buttons */}
               <div className="reports-toolbar">
                 <button className="btn btn-secondary" onClick={exportReportsToCSV}>
-                  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "16px", height: "16px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "16px", height: "16px" }}><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                   Export CSV Ledger
                 </button>
                 <button className="btn btn-primary" onClick={printReport}>
-                  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "16px", height: "16px" }}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: "16px", height: "16px" }}><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                   Print Report (PDF)
                 </button>
               </div>
@@ -1737,9 +2002,15 @@ export default function Home() {
             </div>
             <form onSubmit={submitDriver}>
               <div className="modal-body">
-                <div className="form-group">
-                  <label>Full Name</label>
-                  <input type="text" className="form-control" placeholder="e.g. Alex Mercer" value={driverForm.name} onChange={e => setDriverForm({ ...driverForm, name: e.target.value })} required />
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Full Name</label>
+                    <input type="text" className="form-control" placeholder="e.g. Alex Mercer" value={driverForm.name} onChange={e => setDriverForm({ ...driverForm, name: e.target.value })} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Associated Auth Email</label>
+                    <input type="email" className="form-control" placeholder="alex@transitops.com" value={driverForm.email} onChange={e => setDriverForm({ ...driverForm, email: e.target.value })} />
+                  </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group">
@@ -2123,6 +2394,7 @@ export default function Home() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
