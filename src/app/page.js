@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Chart from "chart.js/auto";
 import { supabase, supabaseConnectionInfo } from "./supabaseClient";
+import TransitOpsLogo from "./TransitOps_logo.png";
 
 const TODAY = "2026-07-12";
 
@@ -1047,12 +1048,7 @@ export default function Home() {
             <div className="login-header">
               <div className="logo-container" style={{ justifyContent: "center", marginBottom: "12px" }}>
                 <div className="logo-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "20px", height: "20px" }}>
-                    <rect x="1" y="3" width="15" height="13" rx="2" ry="2"></rect>
-                    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
-                    <circle cx="5.5" cy="18.5" r="2.5" className="logo-wheel" style={{ transformOrigin: "5.5px 18.5px" }}></circle>
-                    <circle cx="18.5" cy="18.5" r="2.5" className="logo-wheel" style={{ transformOrigin: "18.5px 18.5px" }}></circle>
-                  </svg>
+                  <img src={TransitOpsLogo.src} alt="TransitOps Logo" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }} />
                 </div>
                 <span className="logo-text" style={{ color: "var(--text-primary)", WebkitTextFillColor: "initial" }}>TransitOps</span>
               </div>
@@ -1183,12 +1179,7 @@ export default function Home() {
         <div className="sidebar-logo">
           <div className="logo-container">
             <div className="logo-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "20px", height: "20px" }}>
-                <rect x="1" y="3" width="15" height="13" rx="2" ry="2"></rect>
-                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
-                <circle cx="5.5" cy="18.5" r="2.5" className="logo-wheel" style={{ transformOrigin: "5.5px 18.5px" }}></circle>
-                <circle cx="18.5" cy="18.5" r="2.5" className="logo-wheel" style={{ transformOrigin: "18.5px 18.5px" }}></circle>
-              </svg>
+              <img src={TransitOpsLogo.src} alt="TransitOps Logo" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }} />
             </div>
             <span className="logo-text">TransitOps</span>
           </div>
